@@ -1,0 +1,25 @@
+# Name Classification API (Go)
+
+This project implements a simple HTTP API in Go that integrates with the Genderize API to classify a name by gender and return a processed response.
+
+---
+
+## 🚀 Endpoint
+
+### GET /api/classify?name={name}
+
+---
+
+## 📦 What It Does
+
+1. Accepts a `name` query parameter
+2. Calls the Genderize API:
+   https://api.genderize.io?name={name}
+3. Processes the response
+4. Returns a structured JSON result
+
+The Genderize API returns:
+
+- gender
+- probability
+- count
