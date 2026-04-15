@@ -7,29 +7,10 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Taterbro/backendStageZero/model"
 )
-type GenderizeResponse struct {
-	Count       uint32 `json:"count"`
-	Name        string `json:"name"`
-	Gender      string `json:"gender"`
-	Probability float32  `json:"probability"`
-}
-type ResponseData struct {
-	Name        string  `json:"name"`
-	Gender      string  `json:"gender"`
-	Probability float32 `json:"probability"`
-	SampleSize  uint32  `json:"sample_size"`
-	IsConfident bool    `json:"is_confident"`
-	ProcessedAt string  `json:"processed_at"`
-}
-type SuccessResponse struct {
-	Status string       `json:"status"`
-	Data   ResponseData `json:"data"`
-}
-type ErrorResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
+
 
 
 func writeJson(w http.ResponseWriter, status int, payload any){
@@ -42,7 +23,7 @@ func writeJson(w http.ResponseWriter, status int, payload any){
 func requestHandler(w http.ResponseWriter,r *http.Request){
 	name := r.URL.Query().Get("name")
 	if name == ""{
-		writeJson(w,http.StatusBadRequest,ErrorResponse{
+		writeJson(w,http.StatusBadRequest,model.ErrorResponse{
 			Status:"error", Message: "name parameter is required",
 		})
 		return
