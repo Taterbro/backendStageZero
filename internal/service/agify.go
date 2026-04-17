@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/Taterbro/backendStageZero/internal/model"
@@ -19,7 +20,10 @@ func GetAge(name string) (*model.AgifyResponse, error) {
 	defer resp.Body.Close()
 
 	var result model.AgifyResponse
+	body, _ := io.ReadAll(resp.Body)
 	err = json.NewDecoder(resp.Body).Decode(&result)
+	fmt.Printf("result from agify is: %v",result)
+	fmt.Println("raw agify body is: ",string(body))
 	if err != nil {
 		return nil, err
 	}
