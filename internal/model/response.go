@@ -1,11 +1,7 @@
 package model
 
-type GenderizeResponse struct {
-	Count       uint32  `json:"count"`
-	Name        string  `json:"name"`
-	Gender      string  `json:"gender"`
-	Probability float32 `json:"probability"`
-}
+import "github.com/Taterbro/backendStageZero/internal/database"
+
 type ResponseData struct {
 	Name        string  `json:"name"`
 	Gender      string  `json:"gender"`
@@ -17,6 +13,11 @@ type ResponseData struct {
 type SuccessResponse struct {
 	Status string       `json:"status"`
 	Data   ResponseData `json:"data"`
+}
+type UserSuccessResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Data    database.User `json:"data"`
 }
 type ErrorResponse struct {
 	Status  string `json:"status"`

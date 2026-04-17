@@ -8,8 +8,8 @@ import (
 	"github.com/Taterbro/backendStageZero/internal/model"
 )
 
-func GetGender(name string) (*model.GenderizeResponse, error) {
-	apiURL := fmt.Sprintf("https://api.genderize.io?name=%s", name)
+func GetNation(name string) (*model.NationalizeResponse, error) {
+	apiURL := fmt.Sprintf("https://api.nationalize.io?name=%s", name)
 
 	resp, err := http.Get(apiURL)
 	if err != nil {
@@ -17,11 +17,12 @@ func GetGender(name string) (*model.GenderizeResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	var result model.GenderizeResponse
+	var result model.NationalizeResponse
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
 		return nil, err
 	}
+	
 
 	return &result, nil
 }

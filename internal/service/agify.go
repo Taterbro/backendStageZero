@@ -8,8 +8,8 @@ import (
 	"github.com/Taterbro/backendStageZero/internal/model"
 )
 
-func GetGender(name string) (*model.GenderizeResponse, error) {
-	apiURL := fmt.Sprintf("https://api.genderize.io?name=%s", name)
+func GetAge(name string) (*model.AgifyResponse, error) {
+	apiURL := fmt.Sprintf("https://api.agify.io?name=%s", name)
 
 	resp, err := http.Get(apiURL)
 	if err != nil {
@@ -17,7 +17,7 @@ func GetGender(name string) (*model.GenderizeResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	var result model.GenderizeResponse
+	var result model.AgifyResponse
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
 		return nil, err
