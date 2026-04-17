@@ -14,6 +14,11 @@ type SuccessResponse struct {
 	Status string       `json:"status"`
 	Data   interface{} `json:"data"`
 }
+type GetUserSuccessResponse struct {
+	Status string       `json:"status"`
+	Count int	`json:"count"`
+	Data   []database.User `json:"data"`
+}
 type UserSuccessResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`

@@ -1,5 +1,9 @@
 package database
 
+import (
+	"strings"
+)
+
 type User struct {
 	ID                 string  `json:"id"`
 	Name               string  `json:"name"`
@@ -44,8 +48,34 @@ func (s *Store) GetAllUsers() []User {
 	return all
 }
 
+func (s *Store) GetSomeUsers(gender string, ageGroup string, countryId string) []User {
+	var all = make([]User, 0, len(s.ById))
+	for _, value := range s.ById {
+		if value.isFilterValid(gender, ageGroup, countryId){
+			all = append(all, *value)
+		}
+	}
+	return all
+}
+
 func (s *Store) DeleteUser(id string) {
 	name := s.ById[id].Name
 	delete(s.ById, id)
 	delete(s.ByName, name)
+}
+
+func (u *User) isFilterValid(gender string, ageGroup string, countryId string) bool {
+	if gender != "" && !strings.EqualFold(u.Gender, gender){
+		return  false
+	}
+
+	if ageGroup != "" && !strings.EqualFold(u.AgeGroup, ageGroup){
+		return  false
+	}
+
+	if countryId != "" && !strings.EqualFold(u.CountryID, countryId){
+		return  false
+	}
+
+	return true
 }

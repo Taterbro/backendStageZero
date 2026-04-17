@@ -165,3 +165,43 @@ func FindUser(w http.ResponseWriter, r *http.Request){
         Data: user,
     })
 }
+
+
+func GetAllUsers(w http.ResponseWriter, r *http.Request){
+    gender := strings.ToLower(r.URL.Query().Get("gender"))
+    countryId :=strings.ToLower(r.URL.Query().Get("country_id"))
+    ageGroup := strings.ToLower(r.URL.Query().Get("age_group"))
+
+    users := database.UserStore.GetSomeUsers(gender, ageGroup, countryId)
+    if users == nil{
+        utils.WriteJson(w,http.StatusNotFound, model.ErrorResponse{
+            Status: "error",
+            Message: "Invalid user id; user not found",
+        })
+        return
+    }
+    utils.WriteJson(w,http.StatusOK, model.GetUserSuccessResponse{
+        Status: "success",
+        Count: len(users),
+        Data: users,
+    })
+}
+
+func DeleteUser(w http.ResponseWriter, r *http.Request){
+    targetId := r.PathValue("id")
+    exists := database.UserStore.GetById(targetId)
+    if exists == nil{
+        utils.WriteJson(w,http.StatusNotFound, model.ErrorResponse{
+        Status: "error",
+       Message: "Invalid user id; user not found",
+    })
+    return
+    }
+    database.UserStore.DeleteUser(targetId)
+
+    utils.WriteJson(w,http.StatusOK, model.SuccessResponse{
+        Status: "success",
+        Data: nil,
+    })
+
+}
