@@ -147,3 +147,21 @@ if agifyData.Age > 18 {
             Data: dummyUser,
         })
 }
+
+
+func FindUser(w http.ResponseWriter, r *http.Request){
+    id := r.PathValue("id")
+
+    user := database.UserStore.GetById(id)
+    if user == nil{
+        utils.WriteJson(w,http.StatusNotFound, model.ErrorResponse{
+            Status: "error",
+            Message: "Invalid user id; user not found",
+        })
+        return
+    }
+    utils.WriteJson(w,http.StatusOK, model.SuccessResponse{
+        Status: "success",
+        Data: user,
+    })
+}
