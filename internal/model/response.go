@@ -12,7 +12,7 @@ type ResponseData struct {
 }
 type SuccessResponse struct {
 	Status string       `json:"status"`
-	Data   ResponseData `json:"data"`
+	Data   interface{} `json:"data"`
 }
 type UserSuccessResponse struct {
 	Status  string `json:"status"`

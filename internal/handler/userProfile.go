@@ -3,8 +3,13 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+
+	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -12,6 +17,7 @@ import (
 	"github.com/Taterbro/backendStageZero/internal/model"
 	"github.com/Taterbro/backendStageZero/internal/service"
 	"github.com/Taterbro/backendStageZero/internal/utils"
+	"github.com/google/uuid"
 )
 
 type Request struct{
@@ -37,7 +43,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
         })
         return
     }
-    name := req.Name
+    name := strings.ToLower(req.Name)
 	if _, err := strconv.Atoi(name); err == nil {
 		utils.WriteJson(w, http.StatusUnprocessableEntity, model.ErrorResponse{
 			Status:  "error",
@@ -111,21 +117,32 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		Message: "Nationalize returned an invalid response.",
 	})
 	}
-
+    ageGroup := "child"
+if agifyData.Age > 18 {
+    ageGroup = "adult"
+}
+    
 	dummyUser := database.User{
-		ID:                 1,
+		ID:                 uuid.New().String(),
 		Name:               name,
 		Gender:             genderData.Gender,
 		GenderProbability:  float64(genderData.Probability),
-		SampleSize:         1234,
+		SampleSize:         genderData.Count,
 		Age:               agifyData.Age,
-		AgeGroup:           "adult",
-		CountryID:          "EEHEHEHE",
-		CountryProbability: 0.85,
-		CreatedAt:          "2026-04-01T12:00:00Z",
+		AgeGroup:          ageGroup,
+		CountryID:          nationalityData.Country[0].CountryId,
+		CountryProbability: float64(nationalityData.Country[0].Probability),
+		CreatedAt:           time.Now().UTC().Format(time.RFC3339),
 	}
+    a := sync.RWMutex{}
 
-	utils.WriteJson(w, http.StatusOK, model.UserSuccessResponse{
+    a.RLock()
+    database.UserStore.AddUser(&dummyUser)
+    a.RUnlock()
+
+    fmt.Printf("le database fr fr: %v\n",database.UserStore)
+
+	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
             Status:  "success",
             Data: dummyUser,
         })
