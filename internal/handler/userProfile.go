@@ -142,7 +142,7 @@ if agifyData.Age > 18 {
 
     fmt.Printf("le database fr fr: %v\n",database.UserStore)
 
-	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+	utils.WriteJson(w, http.StatusCreated, model.SuccessResponse{
             Status:  "success",
             Data: dummyUser,
         })
