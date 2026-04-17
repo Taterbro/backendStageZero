@@ -13,6 +13,7 @@ func GetAge(name string) (*model.AgifyResponse, error) {
 
 	resp, err := http.Get(apiURL)
 	if err != nil {
+		fmt.Printf("error from get age: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
