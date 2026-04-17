@@ -1,25 +1,48 @@
-# Name Classification API (Go)
+# Backend Stage Zero API
 
-This project implements a simple HTTP API in Go that integrates with the Genderize API to classify a name by gender and return a processed response.
-
----
-
-## 🚀 Endpoint
-
-### GET /api/classify?name={name}
+A simple Go REST API that classifies users based on their name using external APIs (Agify, Genderize, Nationalize) and stores the result in an in-memory store.
 
 ---
 
-## 📦 What It Does
+## 🚀 Features
 
-1. Accepts a `name` query parameter
-2. Calls the Genderize API:
-   https://api.genderize.io?name={name}
-3. Processes the response
-4. Returns a structured JSON result
+- Create user profile with classification data
+- Fetch user by ID
+- Fetch all users
+- Filter users by:
+  - gender
+  - country_id
+  - age_group
+- Delete users
+- Concurrent external API calls using goroutines (`errgroup`)
+- In-memory data store (no database required)
 
-The Genderize API returns:
+---
 
-- gender
-- probability
-- count
+## 📦 Tech Stack
+
+- Go (net/http)
+- UUID for IDs
+- errgroup (concurrency handling)
+- External APIs:
+  - https://api.agify.io
+  - https://api.genderize.io
+  - https://api.nationalize.io
+
+---
+
+---
+
+## ▶️ Running the Project Locally
+
+Make sure Go is installed:
+
+```bash
+go version
+git clone https://github.com/Taterbro/backendStageZero.git
+cd backendStageZero
+go mod tidy
+go run main.go
+```
+
+server will start at http://localhost:8080
