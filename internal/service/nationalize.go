@@ -22,6 +22,7 @@ func GetNation(name string) (*model.NationalizeResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("nationalize data: %v", result)
 	
 
 	return &result, nil

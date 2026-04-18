@@ -23,5 +23,6 @@ func GetAge(name string) (*model.AgifyResponse, error) {
 		return nil, err
 	}
 
+	fmt.Printf("agify data: %v", result)
 	return &result, nil
 }

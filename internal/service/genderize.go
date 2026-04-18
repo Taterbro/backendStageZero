@@ -22,6 +22,8 @@ func GetGender(name string) (*model.GenderizeResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("genderize data: %v", result)
+
 
 	return &result, nil
 }
