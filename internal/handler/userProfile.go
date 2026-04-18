@@ -97,7 +97,6 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    fmt.Printf("agify response: %v\n %v",*agifyData, agifyData )
     if agifyData.Age==0{
 		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
 		Status: "error",
