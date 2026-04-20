@@ -127,7 +127,6 @@ if agifyData.Age > 18 {
 		Name:               name,
 		Gender:             genderData.Gender,
 		GenderProbability:  float64(genderData.Probability),
-		SampleSize:         genderData.Count,
 		Age:               agifyData.Age,
 		AgeGroup:          ageGroup,
 		CountryID:          nationalityData.Country[0].CountryId,

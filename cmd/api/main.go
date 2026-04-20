@@ -4,10 +4,13 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/Taterbro/backendStageZero/internal/database"
 	"github.com/Taterbro/backendStageZero/internal/handler"
 )
 
+
 func main() {
+	database.Connect()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/classify", handler.ClassifyHandler)
 	mux.HandleFunc("POST /api/profiles", handler.CreateUser)

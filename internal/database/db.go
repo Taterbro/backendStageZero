@@ -1,18 +1,53 @@
 package database
 
 import (
+	"database/sql"
+	"fmt"
+	"log"
+	"os"
 	"strings"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
+
+func Connect(){
+	var db *sql.DB
+
+	err := godotenv.Load()
+    if err != nil {
+        log.Fatal("Error loading .env file")
+    }
+
+	cfg := mysql.NewConfig()
+    cfg.User = os.Getenv("DBUSER")
+    cfg.Passwd = os.Getenv("DBPASS")
+    cfg.Net = "tcp"
+    cfg.Addr = "127.0.0.1:3306"
+    cfg.DBName = "insighta_labs"
+
+    // Get a database handle.
+    db, err = sql.Open("mysql", cfg.FormatDSN())
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    pingErr := db.Ping()
+    if pingErr != nil {
+        log.Fatal(pingErr)
+    }
+    fmt.Println("Database Connected!")
+}
 
 type User struct {
 	ID                 string  `json:"id"`
 	Name               string  `json:"name"`
 	Gender             string  `json:"gender"`
 	GenderProbability  float64 `json:"gender_probability"`
-	SampleSize         uint32  `json:"sample_size"`
-	Age                uint32  `json:"age"`
+	Age                int     `json:"age"`
 	AgeGroup           string  `json:"age_group"`
 	CountryID          string  `json:"country_id"`
+	CountryName        string  `json:"country_name"`
 	CountryProbability float64 `json:"country_probability"`
 	CreatedAt          string  `json:"created_at"`
 }
