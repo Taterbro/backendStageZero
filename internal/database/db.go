@@ -13,34 +13,35 @@ import (
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )
-	var db *sql.DB
-	var data SeedData
 
-func Connect(){
+var db *sql.DB
+var data SeedData
+
+func Connect() {
 
 	err := godotenv.Load()
-    if err != nil {
-        log.Fatal("Error loading .env file")
-    }
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
 	cfg := mysql.NewConfig()
-    cfg.User = os.Getenv("DBUSER")
-    cfg.Passwd = os.Getenv("DBPASS")
-    cfg.Net = "tcp"
-    cfg.Addr = "127.0.0.1:3306"
-    cfg.DBName = "insighta_labs"
+	cfg.User = os.Getenv("DBUSER")
+	cfg.Passwd = os.Getenv("DBPASS")
+	cfg.Net = "tcp"
+	cfg.Addr = "127.0.0.1:3306"
+	cfg.DBName = "insighta_labs"
 
-    // Get a database handle.
-    db, err = sql.Open("mysql", cfg.FormatDSN())
-    if err != nil {
-        log.Fatal(err)
-    }
+	// Get a database handle.
+	db, err = sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    pingErr := db.Ping()
-    if pingErr != nil {
-        log.Fatal(pingErr)
-    }
-    fmt.Println("Database Connected!")
+	pingErr := db.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
+	}
+	fmt.Println("Database Connected!")
 }
 
 type User struct {
@@ -68,78 +69,131 @@ type UserSeed struct {
 	CountryName        string  `json:"country_name"`
 	CountryProbability float64 `json:"country_probability"`
 }
+type SearchFilter struct {
+	Gender                *string
+	AgeGroup              *string
+	CountryID             *string
+	MinAge                *int
+	MaxAge                *int
+	MinGenderProbability  *int
+	MinCountryProbability *int
+	SortBy                *string
+	Order                 *string
+}
 
-func SeedDB(){
+func SeedDB() {
 	file, err := os.ReadFile("internal/database/seed_profiles.json")
-if err != nil {
-	log.Fatal("Error reading seed_profiles.json: \n",err)
-}
-err = json.Unmarshal(file, &data)
-if err != nil {
-	log.Fatal(err)
-}
+	if err != nil {
+		log.Fatal("Error reading seed_profiles.json: \n", err)
+	}
+	err = json.Unmarshal(file, &data)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-for _, p := range data.Profiles {
-	id := uuid.New().String()
-	createdAt := time.Now()
+	for _, p := range data.Profiles {
+		id := uuid.New().String()
+		createdAt := time.Now()
 
-	_, err := db.Exec(`
+		_, err := db.Exec(`
 		INSERT INTO profiles (
 			id, name, gender, gender_probability,
 			age, age_group, country_id, country_name,
 			country_probability, created_at
 		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id,
-		p.Name,
-		p.Gender,
-		p.GenderProbability,
-		p.Age,
-		p.AgeGroup,
-		p.CountryID,
-		p.CountryName,
-		p.CountryProbability,
-		createdAt,
-	)
+			id,
+			p.Name,
+			p.Gender,
+			p.GenderProbability,
+			p.Age,
+			p.AgeGroup,
+			p.CountryID,
+			p.CountryName,
+			p.CountryProbability,
+			createdAt,
+		)
 
-	if err != nil {
-		log.Println("insert error:", err)
+		if err != nil {
+			log.Println("insert error:", err)
+		}
 	}
 }
-}
 
-func QueryAllUsers(name string) ([]User, error) {
-    var users []User
+func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) {
+	queryCommand := "SELECT * FROM profiles WHERE 1=1"
+	var args = make([]any, 0, 7)
+	if filters.Gender != nil {
+		queryCommand += " AND gender = ?"
+		args = append(args, *filters.Gender)
+	}
+	if filters.AgeGroup != nil {
+		queryCommand += " AND age_group = ?"
+		args = append(args, *filters.AgeGroup)
+	}
+	if filters.CountryID != nil {
+		queryCommand += " AND country_id = ?"
+		args = append(args, *filters.CountryID)
 
-    rows, err := db.Query("SELECT * FROM profiles WHERE name = ?", name)
-    if err != nil {
-        return nil, fmt.Errorf("QueryAllUsers %q: %v", name, err)
-    }
-    defer rows.Close()
-    for rows.Next() {
-        var alb User
-        if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability,&alb.Age,&alb.AgeGroup,&alb.CountryID,&alb.CountryName,&alb.CountryProbability,&alb.CreatedAt); err != nil {
-            return nil, fmt.Errorf("QueryAllUsers %q: %v", name, err)
-        }
-        users = append(users, alb)
-    }
-    if err := rows.Err(); err != nil {
-        return nil, fmt.Errorf("QueryAllUsers %q: %v", name, err)
-    }
-    return users, nil
+	}
+	if filters.MinAge != nil {
+		queryCommand += " AND age >= ?"
+		args = append(args, *filters.MinAge)
+	}
+	if filters.MaxAge != nil {
+		queryCommand += " AND age <= ?"
+		args = append(args, *filters.MaxAge)
+	}
+	if filters.MinGenderProbability != nil {
+		queryCommand += " AND gender_probability >= ?"
+		args = append(args, *filters.MinGenderProbability)
+	}
+	if filters.MinCountryProbability != nil {
+		queryCommand += " AND country_probability >= ?"
+		args = append(args, *filters.MinCountryProbability)
+	}
+	if filters.SortBy != nil {
+		queryCommand += " ORDER BY ?"
+		args = append(args, *filters.SortBy)
+	}
+	if filters.Order != nil {
+		shorthand := strings.ToUpper(*filters.Order)
+		queryCommand += " ?"
+		args = append(args, shorthand)
+	}
+	var users []User
+	args = append(args, limit, offset)
+
+	rows, err := db.Query(queryCommand+" ORDER BY age LIMIT ? OFFSET ?", args...)
+	if err != nil {
+		return nil, fmt.Errorf("QueryAllUsers: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var alb User
+		if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
+			return nil, fmt.Errorf("QueryAllUsers: %v", err)
+		}
+		users = append(users, alb)
+	}
+	fmt.Println("users is: \n", users)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QueryAllUsers: %v", err)
+	}
+	return users, nil
 }
 
 func QuerySingleProfileById(id string) (User, error) {
-    var alb User
+	var alb User
 
-    row := db.QueryRow("SELECT * FROM profiles WHERE id = ?", id)
-    if err := row.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability,&alb.Age,&alb.AgeGroup,&alb.CountryID,&alb.CountryName,&alb.CountryProbability,&alb.CreatedAt); err != nil {
-        if err == sql.ErrNoRows {
-            return alb, fmt.Errorf("QuerySingleProfileById %s: no such album", id)
-        }
-        return alb, fmt.Errorf("QuerySingleProfileById %s: %v", id, err)
-    }
-    return alb, nil
+	row := db.QueryRow("SELECT * FROM profiles WHERE id = ?", id)
+	if err := row.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return alb, fmt.Errorf("QuerySingleProfileById %s: no such album", id)
+		}
+		return alb, fmt.Errorf("QuerySingleProfileById %s: %v", id, err)
+	}
+	return alb, nil
 }
 
 type Store struct {
@@ -176,7 +230,7 @@ func (s *Store) GetAllUsers() []User {
 func (s *Store) GetSomeUsers(gender string, ageGroup string, countryId string) []User {
 	var all = make([]User, 0, len(s.ById))
 	for _, value := range s.ById {
-		if value.isFilterValid(gender, ageGroup, countryId){
+		if value.isFilterValid(gender, ageGroup, countryId) {
 			all = append(all, *value)
 		}
 	}
@@ -190,16 +244,16 @@ func (s *Store) DeleteUser(id string) {
 }
 
 func (u *User) isFilterValid(gender string, ageGroup string, countryId string) bool {
-	if gender != "" && !strings.EqualFold(u.Gender, gender){
-		return  false
+	if gender != "" && !strings.EqualFold(u.Gender, gender) {
+		return false
 	}
 
-	if ageGroup != "" && !strings.EqualFold(u.AgeGroup, ageGroup){
-		return  false
+	if ageGroup != "" && !strings.EqualFold(u.AgeGroup, ageGroup) {
+		return false
 	}
 
-	if countryId != "" && !strings.EqualFold(u.CountryID, countryId){
-		return  false
+	if countryId != "" && !strings.EqualFold(u.CountryID, countryId) {
+		return false
 	}
 
 	return true
