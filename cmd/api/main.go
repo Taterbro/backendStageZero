@@ -14,6 +14,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/classify", handler.ClassifyHandler)
 	mux.HandleFunc("POST /api/profiles", handler.CreateUser)
+	mux.HandleFunc("GET /api/seed", handler.Seed)
 	mux.HandleFunc("GET /api/profiles/{id}", handler.FindUser)
 	mux.HandleFunc("GET /api/profiles", handler.GetAllUsers)
 	mux.HandleFunc("DELETE /api/profiles/{id}", handler.DeleteUser)

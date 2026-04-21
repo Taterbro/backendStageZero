@@ -2,17 +2,21 @@ package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )
+	var db *sql.DB
+	var data SeedData
 
 func Connect(){
-	var db *sql.DB
 
 	err := godotenv.Load()
     if err != nil {
@@ -50,6 +54,92 @@ type User struct {
 	CountryName        string  `json:"country_name"`
 	CountryProbability float64 `json:"country_probability"`
 	CreatedAt          string  `json:"created_at"`
+}
+type SeedData struct {
+	Profiles []UserSeed `json:"profiles"`
+}
+type UserSeed struct {
+	Name               string  `json:"name"`
+	Gender             string  `json:"gender"`
+	GenderProbability  float64 `json:"gender_probability"`
+	Age                int     `json:"age"`
+	AgeGroup           string  `json:"age_group"`
+	CountryID          string  `json:"country_id"`
+	CountryName        string  `json:"country_name"`
+	CountryProbability float64 `json:"country_probability"`
+}
+
+func SeedDB(){
+	file, err := os.ReadFile("internal/database/seed_profiles.json")
+if err != nil {
+	log.Fatal("Error reading seed_profiles.json: \n",err)
+}
+err = json.Unmarshal(file, &data)
+if err != nil {
+	log.Fatal(err)
+}
+
+for _, p := range data.Profiles {
+	id := uuid.New().String()
+	createdAt := time.Now()
+
+	_, err := db.Exec(`
+		INSERT INTO profiles (
+			id, name, gender, gender_probability,
+			age, age_group, country_id, country_name,
+			country_probability, created_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id,
+		p.Name,
+		p.Gender,
+		p.GenderProbability,
+		p.Age,
+		p.AgeGroup,
+		p.CountryID,
+		p.CountryName,
+		p.CountryProbability,
+		createdAt,
+	)
+
+	if err != nil {
+		log.Println("insert error:", err)
+	}
+}
+}
+
+func QueryAllUsers(name string) ([]User, error) {
+    var users []User
+
+    rows, err := db.Query("SELECT * FROM profiles WHERE name = ?", name)
+    if err != nil {
+        return nil, fmt.Errorf("QueryAllUsers %q: %v", name, err)
+    }
+    defer rows.Close()
+    for rows.Next() {
+        var alb User
+        if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability,&alb.Age,&alb.AgeGroup,&alb.CountryID,&alb.CountryName,&alb.CountryProbability,&alb.CreatedAt); err != nil {
+            return nil, fmt.Errorf("QueryAllUsers %q: %v", name, err)
+        }
+        users = append(users, alb)
+    }
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("QueryAllUsers %q: %v", name, err)
+    }
+    return users, nil
+}
+
+func QuerySingleProfileById(id string) (User, error) {
+    var alb User
+
+    row := db.QueryRow("SELECT * FROM profiles WHERE id = ?", id)
+    if err := row.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability,&alb.Age,&alb.AgeGroup,&alb.CountryID,&alb.CountryName,&alb.CountryProbability,&alb.CreatedAt); err != nil {
+        if err == sql.ErrNoRows {
+            return alb, fmt.Errorf("QuerySingleProfileById %s: no such album", id)
+        }
+        return alb, fmt.Errorf("QuerySingleProfileById %s: %v", id, err)
+    }
+    return alb, nil
 }
 
 type Store struct {

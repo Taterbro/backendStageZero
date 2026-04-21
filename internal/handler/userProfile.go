@@ -24,6 +24,14 @@ type Request struct{
 	Name string `json:"name"`
 }
 
+func Seed(w http.ResponseWriter, r *http.Request){
+    database.SeedDB()
+    utils.WriteJson(w,http.StatusOK,model.SuccessResponse{
+        Status: "success",
+        Data: "seeded fr fr",
+    })
+}
+
 func CreateUser(w http.ResponseWriter, r *http.Request) {
     var req Request
 
