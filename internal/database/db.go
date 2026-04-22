@@ -121,8 +121,20 @@ func SeedDB() {
 }
 
 func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) {
+	allowedSort := map[string]string{
+		"name":                "name",
+		"age":                 "age",
+		"created_at":          "created_at",
+		"gender_probability":  "gender_probability",
+		"country_probability": "country_probability",
+	}
+
+	allowedOrder := map[string]string{
+		"asc":  "ASC",
+		"desc": "DESC",
+	}
 	queryCommand := "SELECT * FROM profiles WHERE 1=1"
-	var args = make([]any, 0, 7)
+	var args = make([]any, 0, 12)
 	if filters.Gender != nil {
 		queryCommand += " AND gender = ?"
 		args = append(args, *filters.Gender)
@@ -153,18 +165,20 @@ func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) 
 		args = append(args, *filters.MinCountryProbability)
 	}
 	if filters.SortBy != nil {
-		queryCommand += " ORDER BY ?"
-		args = append(args, *filters.SortBy)
-	}
-	if filters.Order != nil {
-		shorthand := strings.ToUpper(*filters.Order)
-		queryCommand += " ?"
-		args = append(args, shorthand)
+		if col, ok := allowedSort[*filters.SortBy]; ok {
+			queryCommand += " ORDER BY " + col
+
+			if filters.Order != nil {
+				if ord, ok := allowedOrder[*filters.Order]; ok {
+					queryCommand += " " + ord
+				}
+			}
+		}
 	}
 	var users []User
 	args = append(args, limit, offset)
 
-	rows, err := db.Query(queryCommand+" ORDER BY age LIMIT ? OFFSET ?", args...)
+	rows, err := db.Query(queryCommand+" LIMIT ? OFFSET ?", args...)
 	if err != nil {
 		return nil, fmt.Errorf("QueryAllUsers: %v", err)
 	}

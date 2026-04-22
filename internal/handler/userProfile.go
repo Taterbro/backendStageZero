@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -172,121 +174,127 @@ func FindUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	var filters database.SearchFilter
 	page := 1
 	limit := 10
-	gender := strings.ToLower(r.URL.Query().Get("gender"))
-	countryId := strings.ToLower(r.URL.Query().Get("country_id"))
-	ageGroup := strings.ToLower(r.URL.Query().Get("age_group"))
-	minAge := r.URL.Query().Get("min_age")
-	maxAge := r.URL.Query().Get("max_age")
-	minGenderProbability := r.URL.Query().Get("min_gender_probability")
-	minCountryProbability := r.URL.Query().Get("min_country_probability")
-	sortBy := strings.ToLower(r.URL.Query().Get("sort_by"))
-	order := strings.ToLower(r.URL.Query().Get("order"))
-	qpage := r.URL.Query().Get("page")
-	qLimit := r.URL.Query().Get("limit")
 
-	if minAge != "" {
+	if q != "" {
+		parsedFilters, err := ParseNaturalLanguageQuery(q)
+		if err != nil {
+			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+				Status:  "error",
+				Message: "Unable to interpret query",
+			})
+			return
+		}
+		filters = parsedFilters
+	}
+
+	if gender := strings.ToLower(r.URL.Query().Get("gender")); gender != "" {
+		filters.Gender = &gender
+	}
+
+	if countryId := strings.ToLower(r.URL.Query().Get("country_id")); countryId != "" {
+		filters.CountryID = &countryId
+	}
+
+	if ageGroup := strings.ToLower(r.URL.Query().Get("age_group")); ageGroup != "" {
+		filters.AgeGroup = &ageGroup
+	}
+
+	if minAge := r.URL.Query().Get("min_age"); minAge != "" {
 		minAgeInt, err := strconv.Atoi(minAge)
 		if err != nil {
 			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 				Status:  "error",
-				Message: "Invalid query parameter; min_age should be a number",
+				Message: "min_age should be a number",
 			})
 			return
-		} else {
-			filters.MinAge = &minAgeInt
 		}
+		filters.MinAge = &minAgeInt
 	}
 
-	if maxAge != "" {
+	if maxAge := r.URL.Query().Get("max_age"); maxAge != "" {
 		maxAgeInt, err := strconv.Atoi(maxAge)
 		if err != nil {
 			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 				Status:  "error",
-				Message: "Invalid query parameter; max_age should be a number",
+				Message: "max_age should be a number",
 			})
 			return
-		} else {
-			filters.MaxAge = &maxAgeInt
 		}
+		filters.MaxAge = &maxAgeInt
 	}
 
-	if minGenderProbability != "" {
-		minGenderProbabilityInt, err := strconv.Atoi(minGenderProbability)
+	if minGenderProbability := r.URL.Query().Get("min_gender_probability"); minGenderProbability != "" {
+		val, err := strconv.Atoi(minGenderProbability)
 		if err != nil {
 			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 				Status:  "error",
-				Message: "Invalid query parameter; min_gender_probability should be a number",
+				Message: "min_gender_probability should be a number",
 			})
 			return
-		} else {
-			filters.MinGenderProbability = &minGenderProbabilityInt
 		}
+		filters.MinGenderProbability = &val
 	}
 
-	if qpage != "" {
-		qpageInt, err := strconv.Atoi(qpage)
+	if minCountryProbability := r.URL.Query().Get("min_country_probability"); minCountryProbability != "" {
+		val, err := strconv.Atoi(minCountryProbability)
 		if err != nil {
 			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 				Status:  "error",
-				Message: "Invalid query parameter; page should be a number",
+				Message: "min_country_probability should be a number",
 			})
 			return
-		} else {
-			page = qpageInt
 		}
+		filters.MinCountryProbability = &val
 	}
 
-	if qLimit != "" {
-		qLimitInt, err := strconv.Atoi(qLimit)
-		if err != nil {
-			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
-				Status:  "error",
-				Message: "Invalid query parameter; limit should be a number",
-			})
-			return
-		}
-		if qLimitInt > 50 {
-			limit = 50
-		} else {
-			limit = qLimitInt
-		}
-	}
-
-	if minCountryProbability != "" {
-		minCountryProbabilityInt, err := strconv.Atoi(minCountryProbability)
-		if err != nil {
-			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
-				Status:  "error",
-				Message: "Invalid query parameter; min_country_probability should be a number",
-			})
-			return
-		} else {
-			filters.MinCountryProbability = &minCountryProbabilityInt
-		}
-	}
-	if gender != "" {
-		filters.Gender = &gender
-	}
-	if countryId != "" {
-		filters.CountryID = &countryId
-	}
-	if ageGroup != "" {
-		filters.AgeGroup = &ageGroup
-	}
-	if sortBy != "" {
+	if sortBy := strings.ToLower(r.URL.Query().Get("sort_by")); sortBy != "" {
 		filters.SortBy = &sortBy
 	}
-	if order != "" {
+
+	if order := strings.ToLower(r.URL.Query().Get("order")); order != "" {
 		filters.Order = &order
 	}
+
+	if qpage := r.URL.Query().Get("page"); qpage != "" {
+		p, err := strconv.Atoi(qpage)
+		if err != nil || p < 1 {
+			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+				Status:  "error",
+				Message: "page should be a valid number",
+			})
+			return
+		}
+		page = p
+	}
+
+	if qLimit := r.URL.Query().Get("limit"); qLimit != "" {
+		l, err := strconv.Atoi(qLimit)
+		if err != nil || l < 1 {
+			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+				Status:  "error",
+				Message: "limit should be a valid number",
+			})
+			return
+		}
+		if l > 50 {
+			l = 50
+		}
+		limit = l
+	}
+
 	offset := (page - 1) * limit
 
 	users, err := database.QueryAllUsers(filters, limit, offset)
-	if err == nil {
-
+	if err != nil {
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "Failed to fetch users",
+		})
+		return
 	}
 
 	utils.WriteJson(w, http.StatusOK, model.GetUserSuccessResponse{
@@ -296,6 +304,115 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		Total:  len(users),
 		Data:   users,
 	})
+}
+
+func ParseNaturalLanguageQuery(q string) (database.SearchFilter, error) {
+	q = normalizeQuery(q)
+
+	var filters database.SearchFilter
+	matched := false
+
+	// gender
+	if hasAnyWord(q, "male", "males") && hasAnyWord(q, "female", "females") {
+		// "male and female" means no gender filter
+		matched = true
+	} else if hasAnyWord(q, "male", "males") {
+		g := "male"
+		filters.Gender = &g
+		matched = true
+	} else if hasAnyWord(q, "female", "females") {
+		g := "female"
+		filters.Gender = &g
+		matched = true
+	}
+
+	// age groups
+	if hasAnyWord(q, "teenager", "teenagers") {
+		ag := "teenager"
+		filters.AgeGroup = &ag
+		matched = true
+	}
+	if hasAnyWord(q, "adult", "adults") {
+		ag := "adult"
+		filters.AgeGroup = &ag
+		matched = true
+	}
+
+	// "young" => 16-24
+	if hasAnyWord(q, "young") {
+		min := 16
+		max := 24
+		filters.MinAge = &min
+		filters.MaxAge = &max
+		matched = true
+	}
+
+	// country: "from nigeria"
+	if m := regexp.MustCompile(`\bfrom\s+([a-z ]+)`).FindStringSubmatch(q); len(m) == 2 {
+		country := strings.TrimSpace(m[1])
+		if alias, ok := CountryAliases[country]; ok {
+			country = alias
+		}
+		code, ok := CountryCodes[country]
+		if !ok {
+			return filters, errors.New("unable to interpret query")
+		}
+		filters.CountryID = &code
+		matched = true
+	}
+
+	// "above 30", "over 30", "older than 30"
+	if m := regexp.MustCompile(`\b(?:above|over|older than)\s+(\d+)\b`).FindStringSubmatch(q); len(m) == 2 {
+		n, _ := strconv.Atoi(m[1])
+		filters.MinAge = &n
+		matched = true
+	}
+
+	// "below 30", "under 30", "younger than 30"
+	if m := regexp.MustCompile(`\b(?:below|under|younger than)\s+(\d+)\b`).FindStringSubmatch(q); len(m) == 2 {
+		n, _ := strconv.Atoi(m[1])
+		filters.MaxAge = &n
+		matched = true
+	}
+
+	// "between 18 and 25"
+	if m := regexp.MustCompile(`\bbetween\s+(\d+)\s+and\s+(\d+)\b`).FindStringSubmatch(q); len(m) == 3 {
+		min, _ := strconv.Atoi(m[1])
+		max, _ := strconv.Atoi(m[2])
+		filters.MinAge = &min
+		filters.MaxAge = &max
+		matched = true
+	}
+
+	// "17+" or "age 17+"
+	if m := regexp.MustCompile(`\b(\d+)\+\b`).FindStringSubmatch(q); len(m) == 2 {
+		n, _ := strconv.Atoi(m[1])
+		filters.MinAge = &n
+		matched = true
+	}
+
+	if !matched {
+		return filters, errors.New("unable to interpret query")
+	}
+
+	return filters, nil
+}
+
+func normalizeQuery(q string) string {
+	q = strings.ToLower(strings.TrimSpace(q))
+	q = regexp.MustCompile(`[^\w\s]+`).ReplaceAllString(q, " ")
+	q = strings.Join(strings.Fields(q), " ")
+	return q
+}
+
+func hasAnyWord(q string, words ...string) bool {
+	for _, word := range words {
+		pattern := `\b` + regexp.QuoteMeta(word) + `\b`
+		if regexp.MustCompile(pattern).FindStringIndex(q) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
