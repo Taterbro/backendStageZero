@@ -1,6 +1,8 @@
 package database
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,8 +19,21 @@ import (
 var db *sql.DB
 var data SeedData
 
-func Connect() {
+func init() {
+	caCert, err := os.ReadFile("ca.pem")
+	if err != nil {
+		panic(err)
+	}
 
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caCert)
+
+	mysql.RegisterTLSConfig("aiven", &tls.Config{
+		RootCAs: caPool,
+	})
+}
+
+func Connect() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -28,8 +43,9 @@ func Connect() {
 	cfg.User = os.Getenv("DBUSER")
 	cfg.Passwd = os.Getenv("DBPASS")
 	cfg.Net = "tcp"
-	cfg.Addr = "127.0.0.1:3306"
-	cfg.DBName = "insighta_labs"
+	cfg.Addr = os.Getenv("DBADDRESS")
+	cfg.DBName = os.Getenv("DBNAME")
+	cfg.TLSConfig = "aiven"
 
 	// Get a database handle.
 	db, err = sql.Open("mysql", cfg.FormatDSN())
@@ -42,6 +58,9 @@ func Connect() {
 		log.Fatal(pingErr)
 	}
 	fmt.Println("Database Connected!")
+	//Migrate(db)
+	//fmt.Println("Migrated successfully!")
+
 }
 
 type User struct {
