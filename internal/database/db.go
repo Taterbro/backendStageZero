@@ -105,22 +105,39 @@ func SeedDB() {
 	if err != nil {
 		log.Fatal("Error reading seed_profiles.json: \n", err)
 	}
+
 	err = json.Unmarshal(file, &data)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, p := range data.Profiles {
-		id := uuid.New().String()
-		createdAt := time.Now()
+	// 🚀 START TRANSACTION
+	tx, err := db.Begin()
+	if err != nil {
+		log.Fatal("failed to start transaction:", err)
+	}
 
-		_, err := db.Exec(`
+	// optional: rollback if something crashes
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
 		INSERT INTO profiles (
 			id, name, gender, gender_probability,
 			age, age_group, country_id, country_name,
 			country_probability, created_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stmt.Close()
+
+	for _, p := range data.Profiles {
+		id := uuid.New().String()
+		createdAt := time.Now()
+
+		_, err := stmt.Exec(
 			id,
 			p.Name,
 			p.Gender,
@@ -137,8 +154,15 @@ func SeedDB() {
 			log.Println("insert error:", err)
 		}
 	}
-}
 
+	// 🚀 COMMIT ONCE
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal("commit failed:", err)
+	}
+
+	fmt.Println("Seeding completed")
+}
 func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) {
 	allowedSort := map[string]string{
 		"name":                "name",
