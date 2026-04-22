@@ -36,7 +36,8 @@ func init() {
 func Connect() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		//log.Fatal("Error loading .env file")
+		fmt.Println("Couldn't load .env; proceeding since in prod")
 	}
 
 	cfg := mysql.NewConfig()
