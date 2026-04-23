@@ -290,9 +290,9 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := database.QueryAllUsers(filters, limit, offset)
 	if err != nil {
-		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
-			Message: "Failed to fetch users",
+			Message: "Unable to interpret query",
 		})
 		return
 	}
@@ -394,7 +394,7 @@ func ParseNaturalLanguageQuery(q string) (database.SearchFilter, error) {
 	if !matched {
 		return filters, errors.New("unable to interpret query")
 	}
-
+	fmt.Println("nlp query filters: ", filters.AgeGroup, "\n", filters.Gender)
 	return filters, nil
 }
 

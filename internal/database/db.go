@@ -240,6 +240,26 @@ func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) 
 	}
 	return users, nil
 }
+func DevQuery(q string) ([]User, error) {
+	var users []User
+
+	rows, err := db.Query((q))
+	if err != nil {
+		return nil, fmt.Errorf("Dev query: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var alb User
+		if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
+			return nil, fmt.Errorf("QueryAllUsers: %v", err)
+		}
+		users = append(users, alb)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("QueryAllUsers: %v", err)
+	}
+	return users, nil
+}
 
 func QuerySingleProfileById(id string) (User, error) {
 	var alb User

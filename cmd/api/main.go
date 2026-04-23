@@ -16,6 +16,7 @@ func main() {
 	mux.HandleFunc("GET /api/seed", handler.Seed)
 	mux.HandleFunc("GET /api/profiles", handler.GetAllUsers)
 	mux.HandleFunc("GET /api/profiles/{id}", handler.FindUser)
+	mux.HandleFunc("GET /api/dev", handler.DevQuery)
 	mux.HandleFunc("DELETE /api/profiles/{id}", handler.DeleteUser)
 
 	server := &http.Server{
