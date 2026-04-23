@@ -394,7 +394,6 @@ func ParseNaturalLanguageQuery(q string) (database.SearchFilter, error) {
 	if !matched {
 		return filters, errors.New("unable to interpret query")
 	}
-	fmt.Println("nlp query filters: ", filters.AgeGroup, "\n", filters.Gender)
 	return filters, nil
 }
 

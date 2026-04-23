@@ -218,9 +218,19 @@ func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) 
 			}
 		}
 	}
+	if filters.SortBy == nil {
+		queryCommand += " ORDER BY created_at"
+	}
 	var users []User
 	args = append(args, limit, offset)
 
+	fullQuery := fmt.Sprintf("%s LIMIT %d OFFSET %d",
+		queryCommand,
+		limit,
+		offset,
+	)
+
+	log.Println(fullQuery)
 	rows, err := db.Query(queryCommand+" LIMIT ? OFFSET ?", args...)
 	if err != nil {
 		return nil, fmt.Errorf("queryAllUsers: %v", err)
