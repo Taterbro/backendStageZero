@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Taterbro/backendStageZero/cmd/api/certs"
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -21,14 +23,9 @@ var data SeedData
 
 func init() {
 	log.Println("running init function")
-	caCert, err := os.ReadFile("ca.pem")
-	if err != nil {
-		fmt.Println("literally nothing")
-		log.Println("certificates error: ", err)
-	}
 
 	caPool := x509.NewCertPool()
-	caPool.AppendCertsFromPEM(caCert)
+	caPool.AppendCertsFromPEM(certs.CaCert)
 
 	mysql.RegisterTLSConfig("aiven", &tls.Config{
 		RootCAs: caPool,
