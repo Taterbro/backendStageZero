@@ -23,7 +23,7 @@ func init() {
 	log.Println("running init function")
 	caCert, err := os.ReadFile("ca.pem")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	caPool := x509.NewCertPool()
