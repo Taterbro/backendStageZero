@@ -20,6 +20,7 @@ var db *sql.DB
 var data SeedData
 
 func init() {
+	log.Println("running init function")
 	caCert, err := os.ReadFile("ca.pem")
 	if err != nil {
 		panic(err)
@@ -37,7 +38,7 @@ func Connect() {
 	err := godotenv.Load()
 	if err != nil {
 		//log.Fatal("Error loading .env file")
-		fmt.Println("Couldn't load .env; proceeding since in prod")
+		fmt.Println("couldn't load .env; proceeding since in prod")
 	}
 
 	cfg := mysql.NewConfig()
@@ -58,7 +59,7 @@ func Connect() {
 	if pingErr != nil {
 		log.Fatal(pingErr)
 	}
-	fmt.Println("Database Connected!")
+	fmt.Println("database Connected!")
 	//Migrate(db)
 	//fmt.Println("Migrated successfully!")
 
@@ -162,7 +163,7 @@ func SeedDB() {
 		log.Fatal("commit failed:", err)
 	}
 
-	fmt.Println("Seeding completed")
+	fmt.Println("seeding completed")
 }
 func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) {
 	allowedSort := map[string]string{
@@ -224,19 +225,19 @@ func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) 
 
 	rows, err := db.Query(queryCommand+" LIMIT ? OFFSET ?", args...)
 	if err != nil {
-		return nil, fmt.Errorf("QueryAllUsers: %v", err)
+		return nil, fmt.Errorf("queryAllUsers: %v", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var alb User
 		if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
-			return nil, fmt.Errorf("QueryAllUsers: %v", err)
+			return nil, fmt.Errorf("queryAllUsers: %v", err)
 		}
 		users = append(users, alb)
 	}
 	fmt.Println("users is: \n", users)
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("QueryAllUsers: %v", err)
+		return nil, fmt.Errorf("queryAllUsers: %v", err)
 	}
 	return users, nil
 }
@@ -245,18 +246,18 @@ func DevQuery(q string) ([]User, error) {
 
 	rows, err := db.Query((q))
 	if err != nil {
-		return nil, fmt.Errorf("Dev query: %v", err)
+		return nil, fmt.Errorf("dev query: %v", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var alb User
 		if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
-			return nil, fmt.Errorf("QueryAllUsers: %v", err)
+			return nil, fmt.Errorf("queryAllUsers: %v", err)
 		}
 		users = append(users, alb)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("QueryAllUsers: %v", err)
+		return nil, fmt.Errorf("queryAllUsers: %v", err)
 	}
 	return users, nil
 }
@@ -267,9 +268,9 @@ func QuerySingleProfileById(id string) (User, error) {
 	row := db.QueryRow("SELECT * FROM profiles WHERE id = ?", id)
 	if err := row.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
-			return alb, fmt.Errorf("QuerySingleProfileById %s: no such album", id)
+			return alb, fmt.Errorf("querySingleProfileById %s: no such album", id)
 		}
-		return alb, fmt.Errorf("QuerySingleProfileById %s: %v", id, err)
+		return alb, fmt.Errorf("querySingleProfileById %s: %v", id, err)
 	}
 	return alb, nil
 }
