@@ -23,6 +23,7 @@ func init() {
 	log.Println("running init function")
 	caCert, err := os.ReadFile("ca.pem")
 	if err != nil {
+		fmt.Println("literally nothing")
 		log.Fatal(err)
 	}
 
