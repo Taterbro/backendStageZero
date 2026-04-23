@@ -9,7 +9,9 @@ import (
 )
 
 func main() {
+	log.Println("Starting server... Running DB next")
 	database.Connect()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/classify", handler.ClassifyHandler)
 	mux.HandleFunc("POST /api/profiles", handler.CreateUser)
