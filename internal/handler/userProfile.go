@@ -182,7 +182,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 	if q != "" {
 		parsedFilters, err := ParseNaturalLanguageQuery(q)
 		if err != nil {
-			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			utils.WriteJson(w, http.StatusUnprocessableEntity, model.ErrorResponse{
 				Status:  "error",
 				Message: "Unable to interpret query",
 			})
@@ -290,7 +290,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, total, err := database.QueryAllUsers(filters, limit, offset)
 	if err != nil {
-		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+		utils.WriteJson(w, http.StatusUnprocessableEntity, model.ErrorResponse{
 			Status:  "error",
 			Message: "Unable to interpret query",
 		})
