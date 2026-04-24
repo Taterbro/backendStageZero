@@ -228,6 +228,8 @@ func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, int, er
 					queryCommand += " " + ord
 				}
 			}
+		} else {
+			return nil, 0, fmt.Errorf("invalid sort_by value")
 		}
 	} else {
 		queryCommand += " ORDER BY created_at"

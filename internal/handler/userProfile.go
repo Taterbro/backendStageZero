@@ -290,7 +290,15 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, total, err := database.QueryAllUsers(filters, limit, offset)
 	if err != nil {
-		utils.WriteJson(w, http.StatusUnprocessableEntity, model.ErrorResponse{
+		if strings.Contains(err.Error(), "invalid") {
+			utils.WriteJson(w, http.StatusUnprocessableEntity, model.ErrorResponse{
+				Status:  "error",
+				Message: "Invalid query parameters",
+			})
+			return
+		}
+
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
 			Message: "Unable to interpret query",
 		})
@@ -364,6 +372,7 @@ func ParseNaturalLanguageQuery(q string) (database.SearchFilter, error) {
 	// "above 30", "over 30", "older than 30"
 	if m := regexp.MustCompile(`\b(?:above|over|older than)\s+(\d+)\b`).FindStringSubmatch(q); len(m) == 2 {
 		n, _ := strconv.Atoi(m[1])
+		n = n + 1
 		filters.MinAge = &n
 		matched = true
 	}
@@ -371,6 +380,7 @@ func ParseNaturalLanguageQuery(q string) (database.SearchFilter, error) {
 	// "below 30", "under 30", "younger than 30"
 	if m := regexp.MustCompile(`\b(?:below|under|younger than)\s+(\d+)\b`).FindStringSubmatch(q); len(m) == 2 {
 		n, _ := strconv.Atoi(m[1])
+		n = n - 1
 		filters.MaxAge = &n
 		matched = true
 	}
