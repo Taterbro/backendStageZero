@@ -288,7 +288,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * limit
 
-	users, err := database.QueryAllUsers(filters, limit, offset)
+	users, total, err := database.QueryAllUsers(filters, limit, offset)
 	if err != nil {
 		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
@@ -301,7 +301,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		Status: "success",
 		Page:   page,
 		Limit:  limit,
-		Total:  len(users),
+		Total:  total,
 		Data:   users,
 	})
 }

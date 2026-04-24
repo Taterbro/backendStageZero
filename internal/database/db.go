@@ -163,7 +163,7 @@ func SeedDB() {
 
 	fmt.Println("seeding completed")
 }
-func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) {
+func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, int, error) {
 	allowedSort := map[string]string{
 		"name":                "name",
 		"age":                 "age",
@@ -176,78 +176,105 @@ func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, error) 
 		"asc":  "ASC",
 		"desc": "DESC",
 	}
+
 	queryCommand := "SELECT * FROM profiles WHERE 1=1"
-	var args = make([]any, 0, 12)
+	countCommand := "SELECT COUNT(*) FROM profiles WHERE 1=1"
+
+	args := make([]any, 0, 12)
+
+	// Apply filters to BOTH queries
 	if filters.Gender != nil {
 		queryCommand += " AND gender = ?"
+		countCommand += " AND gender = ?"
 		args = append(args, *filters.Gender)
 	}
 	if filters.AgeGroup != nil {
 		queryCommand += " AND age_group = ?"
+		countCommand += " AND age_group = ?"
 		args = append(args, *filters.AgeGroup)
 	}
 	if filters.CountryID != nil {
 		queryCommand += " AND country_id = ?"
+		countCommand += " AND country_id = ?"
 		args = append(args, *filters.CountryID)
-
 	}
 	if filters.MinAge != nil {
 		queryCommand += " AND age >= ?"
+		countCommand += " AND age >= ?"
 		args = append(args, *filters.MinAge)
 	}
 	if filters.MaxAge != nil {
 		queryCommand += " AND age <= ?"
+		countCommand += " AND age <= ?"
 		args = append(args, *filters.MaxAge)
 	}
 	if filters.MinGenderProbability != nil {
 		queryCommand += " AND gender_probability >= ?"
+		countCommand += " AND gender_probability >= ?"
 		args = append(args, *filters.MinGenderProbability)
 	}
 	if filters.MinCountryProbability != nil {
 		queryCommand += " AND country_probability >= ?"
+		countCommand += " AND country_probability >= ?"
 		args = append(args, *filters.MinCountryProbability)
 	}
+
+	// Sorting (only for data query)
 	if filters.SortBy != nil {
 		if col, ok := allowedSort[*filters.SortBy]; ok {
 			queryCommand += " ORDER BY " + col
-
 			if filters.Order != nil {
 				if ord, ok := allowedOrder[*filters.Order]; ok {
 					queryCommand += " " + ord
 				}
 			}
 		}
-	}
-	if filters.SortBy == nil {
+	} else {
 		queryCommand += " ORDER BY created_at"
 	}
-	var users []User
-	args = append(args, limit, offset)
 
-	fullQuery := fmt.Sprintf("%s LIMIT %d OFFSET %d",
-		queryCommand,
-		limit,
-		offset,
-	)
-
-	log.Println(fullQuery)
-	rows, err := db.Query(queryCommand+" LIMIT ? OFFSET ?", args...)
+	// 1. Get total count
+	var totalCount int
+	err := db.QueryRow(countCommand, args...).Scan(&totalCount)
 	if err != nil {
-		return nil, fmt.Errorf("queryAllUsers: %v", err)
+		return nil, 0, fmt.Errorf("queryAllUsers (count): %v", err)
+	}
+
+	// 2. Get paginated data
+	dataArgs := append(args, limit, offset)
+
+	rows, err := db.Query(queryCommand+" LIMIT ? OFFSET ?", dataArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("queryAllUsers (data): %v", err)
 	}
 	defer rows.Close()
+
+	var users []User
+
 	for rows.Next() {
-		var alb User
-		if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
-			return nil, fmt.Errorf("queryAllUsers: %v", err)
+		var u User
+		if err := rows.Scan(
+			&u.ID,
+			&u.Name,
+			&u.Gender,
+			&u.GenderProbability,
+			&u.Age,
+			&u.AgeGroup,
+			&u.CountryID,
+			&u.CountryName,
+			&u.CountryProbability,
+			&u.CreatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("queryAllUsers (scan): %v", err)
 		}
-		users = append(users, alb)
+		users = append(users, u)
 	}
-	fmt.Println("users is: \n", users)
+
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("queryAllUsers: %v", err)
+		return nil, 0, fmt.Errorf("queryAllUsers (rows): %v", err)
 	}
-	return users, nil
+
+	return users, totalCount, nil
 }
 func DevQuery(q string) ([]User, error) {
 	var users []User
