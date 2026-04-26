@@ -6,6 +6,7 @@ import (
 
 	"github.com/Taterbro/backendStageZero/internal/database"
 	"github.com/Taterbro/backendStageZero/internal/handler"
+	"github.com/Taterbro/backendStageZero/internal/utils"
 )
 
 func main() {
@@ -24,7 +25,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: cors(mux),
+		Handler: utils.RequestLogger(cors(mux)),
 	}
 
 	log.Println("Server running on http://localhost:8080")
