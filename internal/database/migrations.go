@@ -20,6 +20,19 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 `
 
+var tokensQuery = `
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id CHAR(36) PRIMARY KEY,
+    user_id CHAR(36) NOT NULL,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP NULL,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+`
+
 func Migrate(db *sql.DB) {
 	_, err := db.Exec(query)
 	if err != nil {

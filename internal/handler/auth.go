@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Taterbro/backendStageZero/internal/database"
 	"github.com/Taterbro/backendStageZero/internal/model"
 	"github.com/Taterbro/backendStageZero/internal/utils"
+	"github.com/google/uuid"
 )
 
 type CodeVerifier struct {
@@ -154,4 +156,76 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	userExists, err := database.GetAccount(database.GetAccountType{GithubId: userDetails.Id})
+	var activeId string
+	if err != nil {
+		var userObject = database.Account{
+			ID:          uuid.New().String(),
+			GitHubID:    userDetails.Id,
+			Username:    userDetails.Name,
+			Email:       userDetails.Email,
+			AvatarURL:   userDetails.AvatarUrl,
+			Role:        "analyst",
+			IsActive:    true,
+			LastLoginAt: "",
+			CreatedAt:   "",
+		}
+		accountId, err := database.AddAccount(userObject)
+		activeId = accountId
+		if err != nil {
+			utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+				Status:  "error",
+				Message: "something went wrong on our end",
+			})
+		}
+		database.UpdateLoginTime(database.GetAccountType{Id: activeId})
+	} else {
+		activeId = userExists.ID
+		database.UpdateLoginTime(database.GetAccountType{Id: activeId})
+	}
+
+	refreshToken, err := utils.GenerateToken(32)
+	if err != nil {
+		log.Println(err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong on our end",
+		})
+		return
+	}
+	accessToken, err := utils.GenerateAccessToken(activeId)
+	if err != nil {
+		log.Println(err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong on our end",
+		})
+		return
+	}
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(refreshToken)))
+	database.AddRefreshToken(tokenHash, activeId)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    accessToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   180,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    tokenHash,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   300,
+	})
+
+	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+		Status: "success",
+	})
 }

@@ -70,18 +70,22 @@ type User struct {
 	CreatedAt          string  `json:"created_at"`
 }
 type Account struct {
-	ID          string    `json:"id" db:"id"`
-	GitHubID    string    `json:"github_id" db:"github_id"`
-	Username    string    `json:"username" db:"username"`
-	Email       string    `json:"email" db:"email"`
-	AvatarURL   string    `json:"avatar_url" db:"avatar_url"`
-	Role        string    `json:"role" db:"role"`
-	IsActive    bool      `json:"is_active" db:"is_active"`
-	LastLoginAt time.Time `json:"last_login_at" db:"last_login_at"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	ID          string `json:"id" db:"id"`
+	GitHubID    string `json:"github_id" db:"github_id"`
+	Username    string `json:"username" db:"username"`
+	Email       string `json:"email" db:"email"`
+	AvatarURL   string `json:"avatar_url" db:"avatar_url"`
+	Role        string `json:"role" db:"role"`
+	IsActive    bool   `json:"is_active" db:"is_active"`
+	LastLoginAt string `json:"last_login_at" db:"last_login_at"`
+	CreatedAt   string `json:"created_at" db:"created_at"`
 }
 type SeedData struct {
 	Profiles []UserSeed `json:"profiles"`
+}
+type GetAccountType struct {
+	Id       string
+	GithubId string
 }
 type UserSeed struct {
 	Name               string  `json:"name"`
@@ -303,17 +307,90 @@ func DevQuery(q string) ([]User, error) {
 	}
 	return users, nil
 }
+func GetAccount(id GetAccountType) (Account, error) {
+	var acc Account
 
-func AddAccount(acc Account) (int64, error) {
-	result, err := db.Exec("INSERT INTO users (id,github_id,username,email,avatar_url,role,is_active,last_login_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)", acc.ID, acc.GitHubID, acc.Username, acc.Email, acc.AvatarURL, acc.Role, acc.IsActive, acc.LastLoginAt, acc.CreatedAt)
-	if err != nil {
-		return 0, fmt.Errorf("AddAccount: %v", err)
+	var (
+		row   *sql.Row
+		value string
+	)
+
+	switch {
+	case id.Id != "":
+		row = db.QueryRow("SELECT * FROM users WHERE id = ?", id.Id)
+		value = id.Id
+
+	case id.GithubId != "":
+		row = db.QueryRow("SELECT * FROM users WHERE github_id = ?", id.GithubId)
+		value = id.GithubId
+
+	default:
+		return acc, fmt.Errorf("no id provided")
 	}
-	id, err := result.LastInsertId()
+
+	err := row.Scan(
+		&acc.ID,
+		&acc.GitHubID,
+		&acc.Username,
+		&acc.Email,
+		&acc.AvatarURL,
+		&acc.Role,
+		&acc.IsActive,
+		&acc.LastLoginAt,
+		&acc.CreatedAt,
+	)
+
 	if err != nil {
-		return 0, fmt.Errorf("AddAccount: %v", err)
+		if err == sql.ErrNoRows {
+			return acc, fmt.Errorf("no account found for %s", value)
+		}
+		return acc, err
 	}
-	return id, nil
+
+	return acc, nil
+}
+
+func AddAccount(acc Account) (string, error) {
+	_, err := db.Exec("INSERT INTO users (id,github_id,username,email,avatar_url,role,is_active,last_login_at,created_at) VALUES(?,?,?,?,?,?,?,?,NOW())", acc.ID, acc.GitHubID, acc.Username, acc.Email, acc.AvatarURL, acc.Role, acc.IsActive, acc.LastLoginAt)
+	if err != nil {
+		return "", fmt.Errorf("AddAccount: %v", err)
+	}
+	return acc.ID, nil
+}
+
+func UpdateLoginTime(id GetAccountType) error {
+	var (
+		query string
+		value string
+	)
+
+	switch {
+	case id.Id != "":
+		query = `
+			UPDATE users
+			SET last_login_at = NOW()
+			WHERE id = ?
+		`
+		value = id.Id
+
+	case id.GithubId != "":
+		query = `
+			UPDATE users
+			SET last_login_at = NOW()
+			WHERE github_id = ?
+		`
+		value = id.GithubId
+
+	default:
+		return fmt.Errorf("no id provided")
+	}
+
+	_, err := db.Exec(query, value)
+	if err != nil {
+		return fmt.Errorf("updatelogintime: %v", err)
+	}
+
+	return nil
 }
 
 func QuerySingleProfileById(id string) (User, error) {
