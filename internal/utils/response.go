@@ -12,6 +12,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// ParseJson decodes JSON from request body
+func ParseJson(r *http.Request, v interface{}) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(v)
+}
+
 type StatusRecorder struct {
 	http.ResponseWriter
 	statusCode  int

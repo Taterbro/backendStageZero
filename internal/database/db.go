@@ -58,8 +58,8 @@ func Connect() {
 		log.Fatal(pingErr)
 	}
 	fmt.Println("database Connected!")
-	//Migrate(db)
-	//fmt.Println("Migrated successfully!")
+	Migrate(db)
+	fmt.Println("Migrated successfully!")
 
 }
 

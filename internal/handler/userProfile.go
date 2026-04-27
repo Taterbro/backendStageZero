@@ -440,3 +440,7 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 }
+
+func Authorize(w http.ResponseWriter, r *http.Request) {
+
+}
