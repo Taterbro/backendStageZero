@@ -1,0 +1,157 @@
+package handler
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/Taterbro/backendStageZero/internal/model"
+	"github.com/Taterbro/backendStageZero/internal/utils"
+)
+
+type CodeVerifier struct {
+	Value     string
+	ExpiresAt time.Time
+}
+
+var cache = map[string]CodeVerifier{}
+
+func Set(key, value string, ttl time.Duration) {
+	cache[key] = CodeVerifier{
+		Value:     value,
+		ExpiresAt: time.Now().Add(ttl),
+	}
+}
+
+func Get(key string) (string, bool) {
+	item, ok := cache[key]
+	if !ok {
+		return "", false
+	}
+
+	if time.Now().After(item.ExpiresAt) {
+		delete(cache, key)
+		return "", false
+	}
+
+	return item.Value, true
+}
+
+func GitHubAuth(w http.ResponseWriter, r *http.Request) {
+	client_id := os.Getenv("GITHUB_CLIENT_ID")
+	redirect_url := os.Getenv("GITHUB_REDIRECT_URI")
+	code_verifier, err := utils.GenerateToken(32)
+	if err != nil {
+		log.Println("couldn't generate code challenge")
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "Something went wrong on our end",
+		})
+		return
+	}
+	code_challenge := sha256.Sum256([]byte(code_verifier))
+	code_challenge_method := "S256"
+	state, err := utils.GenerateToken(16)
+	if err != nil {
+		log.Println("couldn't generate state")
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "Something went wrong on our end",
+		})
+		return
+	}
+	Set(state, code_verifier, 10*time.Minute)
+
+	fullUrl := fmt.Sprintf("%s/authorize?client_id=%s&redirect_url=%s&code_challenge=%s&code_challenge_method=%s", os.Getenv("GITHUB_URL"), client_id, redirect_url, code_challenge, code_challenge_method)
+	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+		Status: "success",
+		Data:   fullUrl,
+	})
+
+}
+
+func GitHubCallback(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+	if state == "" {
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			Status:  "error",
+			Message: "missing state parameter",
+		})
+		return
+	}
+	codeVerifier, ok := Get(state)
+	if !ok {
+		utils.WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+			Status:  "error",
+			Message: "Invalid state; unauthorized",
+		})
+	}
+	redirect_url := "http://localhost:8080" //temporary for now
+	fullUrl := fmt.Sprintf("%s/access_token", os.Getenv("GITHUB_URL"))
+	payload := url.Values{}
+	payload.Set("client_id", os.Getenv("GITHUB_CLIENT_ID"))
+	payload.Set("client_secret", os.Getenv("GITHUB_CLIENT_SECRET"))
+	payload.Set("redirect_url", redirect_url)
+	payload.Set("code", code)
+	payload.Set("code_verifier", codeVerifier)
+	resp, err := http.Post(fullUrl, "application/x-www-form-urlencoded", strings.NewReader(payload.Encode()))
+	if err != nil {
+		log.Println(err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong while trying to fetch github access tokens",
+		})
+	}
+	defer resp.Body.Close()
+	var data model.GitAuthResponse
+	decoder := json.NewDecoder(resp.Body)
+	if err = decoder.Decode(&data); err != nil {
+		log.Println("error decoding response body")
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong while trying to fetch github access tokens",
+		})
+		return
+	}
+	log.Println("access token: ", data.AccessToken)
+	var userResp *http.Request
+	userResp, err = http.NewRequest("GET", fmt.Sprintf("%s/user", os.Getenv("GITHUB_ROOT")), nil)
+	if err != nil {
+		log.Println(err)
+		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong while trying to fetch github user profile",
+		})
+		return
+	}
+	userResp.Header.Set("Authorization", fmt.Sprintf("Bearer %s", data.AccessToken))
+	client := &http.Client{}
+	user, err := client.Do(userResp)
+	if err != nil {
+		log.Println("err")
+		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong while trying to fetch github user profile",
+		})
+		return
+	}
+	defer user.Body.Close()
+	var userDetails model.GitUserResponse
+	userDecoder := json.NewDecoder(user.Body)
+	err = userDecoder.Decode(&userDetails)
+	if err != nil {
+		log.Println("error while decoding user details")
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong while trying to fetch github access tokens",
+		})
+		return
+	}
+}

@@ -15,7 +15,6 @@ import (
 	"github.com/Taterbro/backendStageZero/cmd/api/certs"
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
-	"github.com/joho/godotenv"
 )
 
 var db *sql.DB
@@ -33,12 +32,7 @@ func init() {
 }
 
 func Connect() {
-	err := godotenv.Load()
-	if err != nil {
-		//log.Fatal("Error loading .env file")
-		fmt.Println("couldn't load .env; proceeding since in prod")
-	}
-
+	var err error
 	cfg := mysql.NewConfig()
 	cfg.User = os.Getenv("DBUSER")
 	cfg.Passwd = os.Getenv("DBPASS")
@@ -74,6 +68,17 @@ type User struct {
 	CountryName        string  `json:"country_name"`
 	CountryProbability float64 `json:"country_probability"`
 	CreatedAt          string  `json:"created_at"`
+}
+type Account struct {
+	ID          string    `json:"id" db:"id"`
+	GitHubID    string    `json:"github_id" db:"github_id"`
+	Username    string    `json:"username" db:"username"`
+	Email       string    `json:"email" db:"email"`
+	AvatarURL   string    `json:"avatar_url" db:"avatar_url"`
+	Role        string    `json:"role" db:"role"`
+	IsActive    bool      `json:"is_active" db:"is_active"`
+	LastLoginAt time.Time `json:"last_login_at" db:"last_login_at"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 type SeedData struct {
 	Profiles []UserSeed `json:"profiles"`
@@ -297,6 +302,18 @@ func DevQuery(q string) ([]User, error) {
 		return nil, fmt.Errorf("queryAllUsers: %v", err)
 	}
 	return users, nil
+}
+
+func AddAccount(acc Account) (int64, error) {
+	result, err := db.Exec("INSERT INTO users (id,github_id,username,email,avatar_url,role,is_active,last_login_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)", acc.ID, acc.GitHubID, acc.Username, acc.Email, acc.AvatarURL, acc.Role, acc.IsActive, acc.LastLoginAt, acc.CreatedAt)
+	if err != nil {
+		return 0, fmt.Errorf("AddAccount: %v", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("AddAccount: %v", err)
+	}
+	return id, nil
 }
 
 func QuerySingleProfileById(id string) (User, error) {
