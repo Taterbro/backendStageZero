@@ -23,6 +23,8 @@ func main() {
 	mux.HandleFunc("GET /api/dev", handler.DevQuery)
 	mux.HandleFunc("DELETE /api/profiles/{id}", handler.DeleteUser)
 
+	mux.Handle("POST /api/auth", utils.AuthLimiter(http.HandlerFunc(handler.DeleteUser)))
+
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: utils.RequestLogger(cors(mux)),
@@ -30,6 +32,8 @@ func main() {
 
 	log.Println("Server running on http://localhost:8080")
 	log.Fatal(server.ListenAndServe())
+	utils.ClearBucket()
+
 }
 
 func cors(next http.Handler) http.Handler {
