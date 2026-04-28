@@ -27,6 +27,8 @@ func GenerateAccessToken(userId string) (string, error) {
 		"iat": time.Now().Unix(),
 		"iss": "your-app",
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(os.Getenv("JWT_SECRET"))
+
+	return token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 }

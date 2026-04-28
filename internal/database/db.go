@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +41,7 @@ func Connect() {
 	cfg.Addr = os.Getenv("DBADDRESS")
 	cfg.DBName = os.Getenv("DBNAME")
 	cfg.TLSConfig = "aiven"
+	cfg.ParseTime = true
 
 	// Get a database handle.
 	db, err = sql.Open("mysql", cfg.FormatDSN())
@@ -70,22 +72,22 @@ type User struct {
 	CreatedAt          string  `json:"created_at"`
 }
 type Account struct {
-	ID          string `json:"id" db:"id"`
-	GitHubID    string `json:"github_id" db:"github_id"`
-	Username    string `json:"username" db:"username"`
-	Email       string `json:"email" db:"email"`
-	AvatarURL   string `json:"avatar_url" db:"avatar_url"`
-	Role        string `json:"role" db:"role"`
-	IsActive    bool   `json:"is_active" db:"is_active"`
-	LastLoginAt string `json:"last_login_at" db:"last_login_at"`
-	CreatedAt   string `json:"created_at" db:"created_at"`
+	ID          string    `json:"id" db:"id"`
+	GitHubID    int       `json:"github_id" db:"github_id"`
+	Username    string    `json:"username" db:"username"`
+	Email       string    `json:"email" db:"email"`
+	AvatarURL   string    `json:"avatar_url" db:"avatar_url"`
+	Role        string    `json:"role" db:"role"`
+	IsActive    bool      `json:"is_active" db:"is_active"`
+	LastLoginAt time.Time `json:"last_login_at" db:"last_login_at"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 type SeedData struct {
 	Profiles []UserSeed `json:"profiles"`
 }
 type GetAccountType struct {
 	Id       string
-	GithubId string
+	GithubId int
 }
 type UserSeed struct {
 	Name               string  `json:"name"`
@@ -298,12 +300,12 @@ func DevQuery(q string) ([]User, error) {
 	for rows.Next() {
 		var alb User
 		if err := rows.Scan(&alb.ID, &alb.Name, &alb.Gender, &alb.GenderProbability, &alb.Age, &alb.AgeGroup, &alb.CountryID, &alb.CountryName, &alb.CountryProbability, &alb.CreatedAt); err != nil {
-			return nil, fmt.Errorf("queryAllUsers: %v", err)
+			return nil, fmt.Errorf("dev query: %v", err)
 		}
 		users = append(users, alb)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("queryAllUsers: %v", err)
+		return nil, fmt.Errorf("dev query: %v", err)
 	}
 	return users, nil
 }
@@ -320,14 +322,15 @@ func GetAccount(id GetAccountType) (Account, error) {
 		row = db.QueryRow("SELECT * FROM users WHERE id = ?", id.Id)
 		value = id.Id
 
-	case id.GithubId != "":
+	case id.GithubId != 0:
 		row = db.QueryRow("SELECT * FROM users WHERE github_id = ?", id.GithubId)
-		value = id.GithubId
+		value = strconv.Itoa(id.GithubId)
 
 	default:
 		return acc, fmt.Errorf("no id provided")
 	}
-
+	var lastLogin sql.NullTime
+	var createdAt sql.NullTime
 	err := row.Scan(
 		&acc.ID,
 		&acc.GitHubID,
@@ -336,8 +339,8 @@ func GetAccount(id GetAccountType) (Account, error) {
 		&acc.AvatarURL,
 		&acc.Role,
 		&acc.IsActive,
-		&acc.LastLoginAt,
-		&acc.CreatedAt,
+		&lastLogin,
+		&createdAt,
 	)
 
 	if err != nil {
@@ -345,6 +348,12 @@ func GetAccount(id GetAccountType) (Account, error) {
 			return acc, fmt.Errorf("no account found for %s", value)
 		}
 		return acc, err
+	}
+	if lastLogin.Valid {
+		acc.LastLoginAt = lastLogin.Time
+	}
+	if createdAt.Valid {
+		acc.CreatedAt = createdAt.Time
 	}
 
 	return acc, nil
@@ -373,13 +382,13 @@ func UpdateLoginTime(id GetAccountType) error {
 		`
 		value = id.Id
 
-	case id.GithubId != "":
+	case id.GithubId != 0:
 		query = `
 			UPDATE users
 			SET last_login_at = NOW()
 			WHERE github_id = ?
 		`
-		value = id.GithubId
+		value = strconv.Itoa(id.GithubId)
 
 	default:
 		return fmt.Errorf("no id provided")

@@ -30,6 +30,7 @@ func main() {
 	mux.HandleFunc("GET /api/dev", handler.DevQuery)
 	mux.HandleFunc("DELETE /api/profiles/{id}", handler.DeleteUser)
 	mux.Handle("GET /api/auth/github", utils.AuthLimiter(http.HandlerFunc(handler.GitHubAuth)))
+	mux.Handle("GET /api/auth/github/callback", utils.AuthLimiter(http.HandlerFunc(handler.GitHubCallback)))
 
 	server := &http.Server{
 		Addr:    ":8080",

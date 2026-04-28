@@ -2,6 +2,7 @@ package handler
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -47,7 +48,7 @@ func Get(key string) (string, bool) {
 
 func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 	client_id := os.Getenv("GITHUB_CLIENT_ID")
-	redirect_url := os.Getenv("GITHUB_REDIRECT_URI")
+	redirect_uri := os.Getenv("GITHUB_REDIRECT_URI")
 	code_verifier, err := utils.GenerateToken(32)
 	if err != nil {
 		log.Println("couldn't generate code challenge")
@@ -57,7 +58,8 @@ func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	code_challenge := sha256.Sum256([]byte(code_verifier))
+	hash := sha256.Sum256([]byte(code_verifier))
+	code_challenge := base64.RawURLEncoding.EncodeToString(hash[:])
 	code_challenge_method := "S256"
 	state, err := utils.GenerateToken(16)
 	if err != nil {
@@ -70,7 +72,7 @@ func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	Set(state, code_verifier, 10*time.Minute)
 
-	fullUrl := fmt.Sprintf("%s/authorize?client_id=%s&redirect_url=%s&code_challenge=%s&code_challenge_method=%s", os.Getenv("GITHUB_URL"), client_id, redirect_url, code_challenge, code_challenge_method)
+	fullUrl := fmt.Sprintf("%s/authorize?client_id=%s&redirect_uri=%s&code_challenge=%s&code_challenge_method=%s&state=%s", os.Getenv("GITHUB_URL"), client_id, redirect_uri, code_challenge, code_challenge_method, state)
 	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
 		Status: "success",
 		Data:   fullUrl,
@@ -94,28 +96,42 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 			Status:  "error",
 			Message: "Invalid state; unauthorized",
 		})
+		return
 	}
-	redirect_url := "http://localhost:8080" //temporary for now
+	redirect_uri := "http://localhost:8080/auth/github/callback" //temporary for now
 	fullUrl := fmt.Sprintf("%s/access_token", os.Getenv("GITHUB_URL"))
 	payload := url.Values{}
 	payload.Set("client_id", os.Getenv("GITHUB_CLIENT_ID"))
 	payload.Set("client_secret", os.Getenv("GITHUB_CLIENT_SECRET"))
-	payload.Set("redirect_url", redirect_url)
+	payload.Set("redirect_uri", redirect_uri)
 	payload.Set("code", code)
 	payload.Set("code_verifier", codeVerifier)
-	resp, err := http.Post(fullUrl, "application/x-www-form-urlencoded", strings.NewReader(payload.Encode()))
+	req, _ := http.NewRequest("POST", fullUrl, strings.NewReader(payload.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Println(err)
+		log.Println("error posting full url: ", err)
 		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
 			Status:  "error",
 			Message: "something went wrong while trying to fetch github access tokens",
 		})
+		return
 	}
 	defer resp.Body.Close()
 	var data model.GitAuthResponse
 	decoder := json.NewDecoder(resp.Body)
+
 	if err = decoder.Decode(&data); err != nil {
-		log.Println("error decoding response body")
+		log.Println("error decoding response body: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong while trying to fetch github access tokens",
+		})
+		return
+	}
+	if data.Error != "" {
+		log.Println("error: ", data.Error, "\nerror_description: ", data.ErrorDescription)
 		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
 			Status:  "error",
 			Message: "something went wrong while trying to fetch github access tokens",
@@ -149,7 +165,7 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	userDecoder := json.NewDecoder(user.Body)
 	err = userDecoder.Decode(&userDetails)
 	if err != nil {
-		log.Println("error while decoding user details")
+		log.Println("error while decoding user details: ", err)
 		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
 			Status:  "error",
 			Message: "something went wrong while trying to fetch github access tokens",
@@ -159,6 +175,7 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	userExists, err := database.GetAccount(database.GetAccountType{GithubId: userDetails.Id})
 	var activeId string
 	if err != nil {
+		log.Println("find account error: ", err)
 		var userObject = database.Account{
 			ID:          uuid.New().String(),
 			GitHubID:    userDetails.Id,
@@ -167,16 +184,18 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 			AvatarURL:   userDetails.AvatarUrl,
 			Role:        "analyst",
 			IsActive:    true,
-			LastLoginAt: "",
-			CreatedAt:   "",
+			LastLoginAt: time.Now(),
+			CreatedAt:   time.Now(),
 		}
 		accountId, err := database.AddAccount(userObject)
 		activeId = accountId
 		if err != nil {
+			log.Println("error creating user acccount: ", err)
 			utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
 				Status:  "error",
 				Message: "something went wrong on our end",
 			})
+			return
 		}
 		database.UpdateLoginTime(database.GetAccountType{Id: activeId})
 	} else {
@@ -186,7 +205,7 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	refreshToken, err := utils.GenerateToken(32)
 	if err != nil {
-		log.Println(err)
+		log.Println("error generating token: ", err)
 		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
 			Status:  "error",
 			Message: "something went wrong on our end",
@@ -195,7 +214,7 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	accessToken, err := utils.GenerateAccessToken(activeId)
 	if err != nil {
-		log.Println(err)
+		log.Println("error generating access token: ", err)
 		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
 			Status:  "error",
 			Message: "something went wrong on our end",

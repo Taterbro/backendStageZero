@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"log"
 	"time"
 
@@ -13,17 +14,18 @@ type RefreshToken struct {
 	TokenHash string
 	IssuedAt  time.Time
 	ExpiresAt time.Time
-	RevokedAt time.Time
+	RevokedAt sql.NullTime
 }
 
 func AddRefreshToken(hash string, userId string) error {
 	var token RefreshToken
+	var revoked sql.NullTime
 	token.ID = uuid.New().String()
 	token.UserID = userId
 	token.TokenHash = hash
 	token.IssuedAt = time.Now()
 	token.ExpiresAt = time.Now().Add(5 * time.Minute)
-	token.RevokedAt = time.Time{}
+	token.RevokedAt = revoked
 	query := `
 		INSERT INTO refresh_tokens (
 			id,
@@ -43,7 +45,7 @@ func AddRefreshToken(hash string, userId string) error {
 		token.TokenHash,
 		token.IssuedAt,
 		token.ExpiresAt,
-		token.RevokedAt,
+		revoked,
 	)
 	if err != nil {
 		log.Println(err)

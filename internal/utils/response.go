@@ -2,13 +2,17 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Taterbro/backendStageZero/internal/model"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/time/rate"
 )
 
@@ -66,6 +70,49 @@ func RequestLogger(next http.Handler) http.Handler {
 		startTime := time.Now()
 		next.ServeHTTP(recorder, r)
 		log.Printf("%s %s %d %s", r.Method, r.URL.Path, recorder.statusCode, time.Since(startTime))
+	})
+}
+
+func ValidateToken(tokenString string) (*jwt.Token, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("invalid signing method")
+		}
+		return os.Getenv("JWT_SECRET"), nil
+	})
+}
+
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+
+		if header == "" {
+			WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+				Status:  "error",
+				Message: "missing token; unauthorized",
+			})
+			return
+		}
+
+		parts := strings.Split(header, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+				Status:  "error",
+				Message: "invalid auth header",
+			})
+			return
+		}
+
+		token, err := ValidateToken(parts[1])
+		if err != nil || !token.Valid {
+			WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+				Status:  "error",
+				Message: "invalid token",
+			})
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 
