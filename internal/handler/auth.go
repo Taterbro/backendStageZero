@@ -99,7 +99,7 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	redirect_uri := "http://localhost:8080/auth/github/callback" //temporary for now
+	redirect_uri := os.Getenv("GITHUB_REDIRECT_URI") //temporary for now
 	fullUrl := fmt.Sprintf("%s/access_token", os.Getenv("GITHUB_URL"))
 	payload := url.Values{}
 	payload.Set("client_id", os.Getenv("GITHUB_CLIENT_ID"))
