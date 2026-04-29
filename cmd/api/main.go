@@ -23,6 +23,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/classify", handler.ClassifyHandler)
 	mux.Handle("POST /api/profiles", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.CreateUser))))
+	mux.Handle("POST /api/profiles/export", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.ExportProfilesCSV))))
 	mux.HandleFunc("GET /api/seed", handler.Seed)
 	mux.Handle("GET /api/profiles", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.GetAllUsers))))
 	mux.Handle("GET /api/profiles/search", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.GetAllUsers))))

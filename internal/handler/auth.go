@@ -83,6 +83,7 @@ func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
+	clientPlatform := r.URL.Query().Get("platform")
 	if state == "" {
 		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
@@ -224,25 +225,31 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(refreshToken)))
 	database.AddRefreshToken(tokenHash, activeId)
 
-	// http.SetCookie(w, &http.Cookie{
-	// 	Name:     "access_token",
-	// 	Value:    accessToken,
-	// 	Path:     "/",
-	// 	HttpOnly: true,
-	// 	Secure:   true,
-	// 	SameSite: http.SameSiteLaxMode,
-	// 	MaxAge:   180,
-	// })
+	if clientPlatform == "browser" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "access_token",
+			Value:    accessToken,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   180,
+		})
 
-	// http.SetCookie(w, &http.Cookie{
-	// 	Name:     "refresh_token",
-	// 	Value:    tokenHash,
-	// 	Path:     "/",
-	// 	HttpOnly: true,
-	// 	Secure:   true,
-	// 	SameSite: http.SameSiteLaxMode,
-	// 	MaxAge:   300,
-	// })
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    tokenHash,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   300,
+		})
+		utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+			Status: "success",
+		})
+		return
+	}
 
 	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
 		Status: "success",

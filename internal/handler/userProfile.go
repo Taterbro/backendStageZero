@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -529,4 +531,166 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		Data:   nil,
 	})
 
+}
+
+func ExportProfilesCSV(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("X-API-Version")
+	if header == "" {
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			Status:  "error",
+			Message: "API version header required",
+		})
+		return
+	}
+
+	if header != "1" && header != "2" {
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			Status:  "error",
+			Message: "API version is invalid",
+		})
+		return
+	}
+
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format != "csv" {
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			Status:  "error",
+			Message: "format must be csv",
+		})
+		return
+	}
+
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+
+	var filters database.SearchFilter
+	limit := 1000000
+	offset := 0
+
+	if q != "" {
+		parsedFilters, err := ParseNaturalLanguageQuery(q)
+		if err != nil {
+			utils.WriteJson(w, http.StatusUnprocessableEntity, model.ErrorResponse{
+				Status:  "error",
+				Message: "Unable to interpret query",
+			})
+			return
+		}
+		filters = parsedFilters
+	}
+
+	if gender := strings.ToLower(r.URL.Query().Get("gender")); gender != "" {
+		filters.Gender = &gender
+	}
+
+	if countryId := strings.ToLower(r.URL.Query().Get("country_id")); countryId != "" {
+		filters.CountryID = &countryId
+	}
+
+	if ageGroup := strings.ToLower(r.URL.Query().Get("age_group")); ageGroup != "" {
+		filters.AgeGroup = &ageGroup
+	}
+
+	if minAge := r.URL.Query().Get("min_age"); minAge != "" {
+		val, err := strconv.Atoi(minAge)
+		if err != nil {
+			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+				Status:  "error",
+				Message: "min_age should be a number",
+			})
+			return
+		}
+		filters.MinAge = &val
+	}
+
+	if maxAge := r.URL.Query().Get("max_age"); maxAge != "" {
+		val, err := strconv.Atoi(maxAge)
+		if err != nil {
+			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+				Status:  "error",
+				Message: "max_age should be a number",
+			})
+			return
+		}
+		filters.MaxAge = &val
+	}
+
+	if minGenderProbability := r.URL.Query().Get("min_gender_probability"); minGenderProbability != "" {
+		val, err := strconv.Atoi(minGenderProbability)
+		if err != nil {
+			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+				Status:  "error",
+				Message: "min_gender_probability should be a number",
+			})
+			return
+		}
+		filters.MinGenderProbability = &val
+	}
+
+	if minCountryProbability := r.URL.Query().Get("min_country_probability"); minCountryProbability != "" {
+		val, err := strconv.Atoi(minCountryProbability)
+		if err != nil {
+			utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+				Status:  "error",
+				Message: "min_country_probability should be a number",
+			})
+			return
+		}
+		filters.MinCountryProbability = &val
+	}
+
+	if sortBy := strings.ToLower(r.URL.Query().Get("sort_by")); sortBy != "" {
+		filters.SortBy = &sortBy
+	}
+
+	if order := strings.ToLower(r.URL.Query().Get("order")); order != "" {
+		filters.Order = &order
+	}
+
+	users, _, err := database.QueryAllUsers(filters, limit, offset)
+	if err != nil {
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			Status:  "error",
+			Message: "Unable to export profiles",
+		})
+		return
+	}
+
+	filename := fmt.Sprintf(
+		"profiles_%s.csv",
+		time.Now().Format("20060102_150405"),
+	)
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set(
+		"Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s"`, filename),
+	)
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	writer.Write([]string{
+		"id",
+		"name",
+		"gender",
+		"gender_probability",
+		"age",
+		"country_id",
+		"country_probability",
+		"created_at",
+		"updated_at",
+	})
+
+	for _, user := range users {
+		writer.Write([]string{
+			user.ID,
+			user.Name,
+			user.Gender,
+			strconv.FormatFloat(user.GenderProbability, 'f', 2, 64),
+			strconv.Itoa(user.Age),
+			user.CountryID,
+			strconv.FormatFloat(user.CountryProbability, 'f', 2, 64),
+			user.CreatedAt.Format(time.RFC3339),
+		})
+	}
 }
