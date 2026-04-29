@@ -75,11 +75,34 @@ func RequestLogger(next http.Handler) http.Handler {
 
 func ValidateToken(tokenString string) (*jwt.Token, error) {
 	return jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-		if token.Method != jwt.SigningMethodHS256 {
+		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, fmt.Errorf("invalid signing method")
 		}
-		return os.Getenv("JWT_SECRET"), nil
+
+		return []byte(os.Getenv("JWT_SECRET")), nil
 	})
+}
+
+func GetUserIDFromToken(tokenString string) (string, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+
+	if err != nil || !token.Valid {
+		return "", fmt.Errorf("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("invalid claims")
+	}
+
+	userID, ok := claims["sub"].(string)
+	if !ok {
+		return "", fmt.Errorf("user id missing")
+	}
+
+	return userID, nil
 }
 
 func AuthMiddleware(next http.Handler) http.Handler {
@@ -105,6 +128,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		token, err := ValidateToken(parts[1])
 		if err != nil || !token.Valid {
+			log.Println("validate token err: ", err)
 			WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
 				Status:  "error",
 				Message: "invalid token",

@@ -224,26 +224,138 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(refreshToken)))
 	database.AddRefreshToken(tokenHash, activeId)
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    accessToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   180,
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:     "access_token",
+	// 	Value:    accessToken,
+	// 	Path:     "/",
+	// 	HttpOnly: true,
+	// 	Secure:   true,
+	// 	SameSite: http.SameSiteLaxMode,
+	// 	MaxAge:   180,
+	// })
+
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:     "refresh_token",
+	// 	Value:    tokenHash,
+	// 	Path:     "/",
+	// 	HttpOnly: true,
+	// 	Secure:   true,
+	// 	SameSite: http.SameSiteLaxMode,
+	// 	MaxAge:   300,
+	// })
+
+	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+		Status: "success",
+		Data: map[string]string{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+		},
+	})
+}
+
+func Refresh(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil {
+		log.Println("decoding error: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong on our end",
+		})
+		return
+	}
+	token := body.RefreshToken
+	if token == "" {
+		utils.WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+			Status:  "error",
+			Message: "no token provided",
+		})
+		return
+	}
+	hashedBytes := sha256.Sum256([]byte(token))
+	hash := fmt.Sprintf("%x", hashedBytes)
+	tokenVerify, err := database.GetRefreshToken(database.TokenGetter{Hash: hash})
+	if err != nil {
+		log.Println("get token error: ", err)
+		utils.WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+			Status:  "error",
+			Message: "invalid token",
+		})
+		return
+	}
+
+	if !time.Now().Before(tokenVerify.ExpiresAt) {
+		utils.WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+			Status:  "error",
+			Message: "token expired",
+		})
+		return
+	}
+	err = database.DeleteRefreshToken(database.TokenGetter{Hash: tokenVerify.TokenHash})
+	if err != nil {
+		log.Println("delete token error: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong on our end",
+		})
+		return
+	}
+
+	refreshToken, err := utils.GenerateToken(32)
+	if err != nil {
+		log.Println("error generating token: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong on our end",
+		})
+		return
+	}
+	accessToken, err := utils.GenerateAccessToken(tokenVerify.UserID)
+	if err != nil {
+		log.Println("error generating access token: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong on our end",
+		})
+		return
+	}
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(refreshToken)))
+	database.AddRefreshToken(tokenHash, tokenVerify.UserID)
+
+	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+		Status: "success",
+		Data: map[string]string{
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+		},
 	})
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    tokenHash,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   300,
-	})
+}
 
+func Logout(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("Authorization")
+	parts := strings.Split(header, " ")
+	token := parts[1]
+	userId, err := utils.GetUserIDFromToken(token)
+	if err != nil {
+		log.Println("find user id error: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "we could not find the account associated with that token",
+		})
+		return
+	}
+	err = database.DeleteRefreshToken(database.TokenGetter{UserId: userId})
+	if err != nil {
+		log.Println(err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "token invalidation failed; logout was unsuccessful",
+		})
+		return
+	}
 	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
 		Status: "success",
 	})
