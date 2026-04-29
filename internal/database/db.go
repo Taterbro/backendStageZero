@@ -289,6 +289,7 @@ func QueryAllUsers(filters SearchFilter, limit int, offset int) ([]User, int, er
 
 	return users, totalCount, nil
 }
+
 func DevQuery(q string) ([]User, error) {
 	var users []User
 
@@ -401,7 +402,48 @@ func UpdateLoginTime(id GetAccountType) error {
 
 	return nil
 }
+func GetUserByName(name string) (User, error) {
+	var user User
 
+	row := db.QueryRow(`
+		SELECT 
+			id,
+			name,
+			gender,
+			gender_probability,
+			age,
+			age_group,
+			country_id,
+			country_name,
+			country_probability,
+			created_at
+		FROM profiles
+		WHERE name = ?
+		LIMIT 1
+	`, name)
+
+	err := row.Scan(
+		&user.ID,
+		&user.Name,
+		&user.Gender,
+		&user.GenderProbability,
+		&user.Age,
+		&user.AgeGroup,
+		&user.CountryID,
+		&user.CountryName,
+		&user.CountryProbability,
+		&user.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return user, fmt.Errorf("user not found")
+		}
+		return user, fmt.Errorf("getuserbyname: %v", err)
+	}
+
+	return user, nil
+}
 func QuerySingleProfileById(id string) (User, error) {
 	var alb User
 
@@ -413,6 +455,40 @@ func QuerySingleProfileById(id string) (User, error) {
 		return alb, fmt.Errorf("querySingleProfileById %s: %v", id, err)
 	}
 	return alb, nil
+}
+func AddProfile(user User) error {
+	_, err := db.Exec(`
+		INSERT INTO profiles (
+			id,
+			name,
+			gender,
+			gender_probability,
+			age,
+			age_group,
+			country_id,
+			country_name,
+			country_probability,
+			created_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		user.ID,
+		user.Name,
+		user.Gender,
+		user.GenderProbability,
+		user.Age,
+		user.AgeGroup,
+		user.CountryID,
+		user.CountryName,
+		user.CountryProbability,
+		user.CreatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("addprofile: %v", err)
+	}
+
+	return nil
 }
 
 type Store struct {

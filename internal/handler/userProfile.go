@@ -1,16 +1,13 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -35,39 +32,42 @@ func Seed(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateUser(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("Authorization")
+	parts := strings.Split(header, " ")
+	userId, _ := utils.GetUserIDFromToken(parts[1])
+	userAccount, _ := database.GetAccount(database.GetAccountType{Id: userId})
+	if userAccount.Role != "admin" {
+		utils.WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
+			Status:  "error",
+			Message: "this function cannot be performed by you",
+		})
+		return
+	}
 	var req Request
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
-		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
 			Message: "Invalid request body",
 		})
 		return
 	}
 
-	if req.Name == "" {
+	name := strings.ToLower(strings.TrimSpace(req.Name))
+
+	if name == "" {
 		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
 			Message: "Name field is required",
 		})
 		return
 	}
-	name := strings.ToLower(req.Name)
+
 	if _, err := strconv.Atoi(name); err == nil {
 		utils.WriteJson(w, http.StatusUnprocessableEntity, model.ErrorResponse{
 			Status:  "error",
-			Message: "name should not be a number",
-		})
-		return
-	}
-
-	user, ok := database.UserStore.ByName[name]
-	if ok {
-		utils.WriteJson(w, http.StatusOK, model.UserSuccessResponse{
-			Status:  "success",
-			Message: "Profile already exists",
-			Data:    *user,
+			Message: "name should not be only numbers",
 		})
 		return
 	}
@@ -78,7 +78,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		nationalityData *model.NationalizeResponse
 	)
 
-	g, _ := errgroup.WithContext(context.Background())
+	g, _ := errgroup.WithContext(r.Context())
 
 	g.Go(func() error {
 		var err error
@@ -106,32 +106,36 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if agifyData.Age == 0 {
+	if agifyData == nil || agifyData.Age == 0 {
 		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
 			Status:  "error",
-			Message: "Agify returned an invalid response.",
+			Message: "Agify returned invalid data",
 		})
 		return
 	}
-	if genderData.Gender == "" {
+
+	if genderData == nil || genderData.Gender == "" {
 		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
 			Status:  "error",
-			Message: "Genderize returned an invalid response.",
+			Message: "Genderize returned invalid data",
 		})
 		return
 	}
-	if nationalityData.Country == nil {
+
+	if nationalityData == nil || len(nationalityData.Country) == 0 {
 		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
 			Status:  "error",
-			Message: "Nationalize returned an invalid response.",
+			Message: "Nationalize returned invalid data",
 		})
+		return
 	}
+
 	ageGroup := "child"
-	if agifyData.Age > 18 {
+	if agifyData.Age >= 18 {
 		ageGroup = "adult"
 	}
 
-	dummyUser := database.User{
+	user := database.User{
 		ID:                 uuid.New().String(),
 		Name:               name,
 		Gender:             genderData.Gender,
@@ -139,20 +143,35 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		Age:                agifyData.Age,
 		AgeGroup:           ageGroup,
 		CountryID:          nationalityData.Country[0].CountryId,
+		CountryName:        nationalityData.Country[0].CountryId, // replace if API provides full name
 		CountryProbability: float64(nationalityData.Country[0].Probability),
 		CreatedAt:          time.Now().UTC().Format(time.RFC3339),
 	}
-	a := sync.RWMutex{}
 
-	a.RLock()
-	database.UserStore.AddUser(&dummyUser)
-	a.RUnlock()
+	err := database.AddProfile(user)
 
-	fmt.Printf("le database fr fr: %v\n", database.UserStore)
+	if err != nil {
+		// assuming AddProfile returns duplicate-key error from UNIQUE(name)
+		existingUser, getErr := database.GetUserByName(name)
+		if getErr == nil {
+			utils.WriteJson(w, http.StatusOK, model.UserSuccessResponse{
+				Status:  "success",
+				Message: "Profile already exists",
+				Data:    existingUser,
+			})
+			return
+		}
+
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "Failed to create profile",
+		})
+		return
+	}
 
 	utils.WriteJson(w, http.StatusCreated, model.SuccessResponse{
 		Status: "success",
-		Data:   dummyUser,
+		Data:   user,
 	})
 }
 
