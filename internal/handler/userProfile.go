@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -43,6 +44,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
 	var req Request
 
 	decoder := json.NewDecoder(r.Body)
@@ -55,6 +57,15 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := strings.ToLower(strings.TrimSpace(req.Name))
+	existingUser, getErr := database.GetUserByName(name)
+	if getErr == nil {
+		utils.WriteJson(w, http.StatusOK, model.UserSuccessResponse{
+			Status:  "success",
+			Message: "Profile already exists",
+			Data:    existingUser,
+		})
+		return
+	}
 
 	if name == "" {
 		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
@@ -83,22 +94,32 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	g.Go(func() error {
 		var err error
 		agifyData, err = service.GetAge(name)
+		if err != nil {
+			return err
+		}
 		return err
 	})
 
 	g.Go(func() error {
 		var err error
 		genderData, err = service.GetGender(name)
+		if err != nil {
+			return err
+		}
 		return err
 	})
 
 	g.Go(func() error {
 		var err error
 		nationalityData, err = service.GetNation(name)
+		if err != nil {
+			return err
+		}
 		return err
 	})
 
 	if err := g.Wait(); err != nil {
+		log.Println("go routines tweaking: ", err)
 		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
 			Status:  "error",
 			Message: "Failed to fetch external data",
@@ -123,6 +144,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if nationalityData == nil || len(nationalityData.Country) == 0 {
+
 		utils.WriteJson(w, http.StatusBadGateway, model.ErrorResponse{
 			Status:  "error",
 			Message: "Nationalize returned invalid data",
@@ -145,23 +167,13 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		CountryID:          nationalityData.Country[0].CountryId,
 		CountryName:        nationalityData.Country[0].CountryId, // replace if API provides full name
 		CountryProbability: float64(nationalityData.Country[0].Probability),
-		CreatedAt:          time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:          time.Now().UTC(),
 	}
 
 	err := database.AddProfile(user)
 
 	if err != nil {
-		// assuming AddProfile returns duplicate-key error from UNIQUE(name)
-		existingUser, getErr := database.GetUserByName(name)
-		if getErr == nil {
-			utils.WriteJson(w, http.StatusOK, model.UserSuccessResponse{
-				Status:  "success",
-				Message: "Profile already exists",
-				Data:    existingUser,
-			})
-			return
-		}
-
+		log.Println("error is: ", err)
 		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
 			Status:  "error",
 			Message: "Failed to create profile",
