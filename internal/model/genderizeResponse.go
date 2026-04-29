@@ -6,3 +6,7 @@ type GenderizeResponse struct {
 	Gender      string  `json:"gender"`
 	Probability float32 `json:"probability"`
 }
+
+type ApiError struct {
+	Error string `json:"error"`
+}
