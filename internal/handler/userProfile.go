@@ -174,6 +174,21 @@ func FindUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("X-API-Version")
+	if header == "" {
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			Status:  "error",
+			Message: "API version header required",
+		})
+		return
+	}
+	if header != "1" && header != "2" {
+		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
+			Status:  "error",
+			Message: "API version is invalid",
+		})
+		return
+	}
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	var filters database.SearchFilter
 	page := 1
@@ -305,13 +320,57 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJson(w, http.StatusOK, model.GetUserSuccessResponse{
-		Status: "success",
-		Page:   page,
-		Limit:  limit,
-		Total:  total,
-		Data:   users,
-	})
+	if header == "1" {
+		utils.WriteJson(w, http.StatusOK, model.GetUserSuccessResponse{
+			Status: "success",
+			Page:   page,
+			Limit:  limit,
+			Total:  total,
+			Data:   users,
+		})
+		return
+	}
+	if header == "2" {
+		totalPages := (total + limit - 1) / limit // proper ceiling division
+
+		next := ""
+		prev := ""
+
+		if page < totalPages {
+			u := *r.URL // copy URL struct
+
+			q := u.Query() // clone query params
+			q.Set("page", strconv.Itoa(page+1))
+			u.Scheme = "https"
+			u.Host = r.Host
+			u.RawQuery = q.Encode()
+			next = u.String()
+		}
+
+		if page > 1 {
+			u := *r.URL // copy URL struct
+
+			q := u.Query() // clone query params
+			q.Set("page", strconv.Itoa(page-1))
+			u.Scheme = "https"
+			u.Host = r.Host
+			u.RawQuery = q.Encode()
+			prev = u.String()
+		}
+
+		utils.WriteJson(w, http.StatusOK, map[string]any{
+			"status":      "success",
+			"page":        page,
+			"limit":       limit,
+			"total":       total,
+			"total_pages": totalPages,
+			"next":        next,
+			"prev":        prev,
+			"data":        users,
+		})
+		return
+	}
+
 }
 
 func ParseNaturalLanguageQuery(q string) (database.SearchFilter, error) {
