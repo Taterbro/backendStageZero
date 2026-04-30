@@ -27,13 +27,13 @@ func main() {
 	mux.HandleFunc("GET /api/seed", handler.Seed)
 	mux.Handle("GET /api/profiles", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.GetAllUsers))))
 	mux.Handle("GET /api/profiles/search", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.GetAllUsers))))
-	mux.HandleFunc("GET /api/profiles/{id}", handler.FindUser)
+	mux.Handle("GET /api/profiles/{id}", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.FindUser))))
 	mux.HandleFunc("GET /api/dev", handler.DevQuery)
 	mux.HandleFunc("DELETE /api/profiles/{id}", handler.DeleteUser)
 	mux.Handle("GET /api/auth/github", utils.AuthLimiter(http.HandlerFunc(handler.GitHubAuth)))
 	mux.Handle("GET /api/auth/github/callback", utils.AuthLimiter(http.HandlerFunc(handler.GitHubCallback)))
 	mux.Handle("GET /api/auth/callback/poll", utils.AuthLimiter(http.HandlerFunc(handler.CliPoll)))
-	mux.Handle("GET /api/auth/refresh", utils.AuthLimiter(http.HandlerFunc(handler.Refresh)))
+	mux.Handle("POST /api/auth/refresh", utils.AuthLimiter(http.HandlerFunc(handler.Refresh)))
 	mux.Handle("GET /api/auth/logout", utils.AuthMiddleware(utils.AuthLimiter(http.HandlerFunc(handler.Logout))))
 
 	server := &http.Server{

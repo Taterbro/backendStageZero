@@ -191,9 +191,9 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 func FindUser(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-
-	user := database.UserStore.GetById(id)
-	if user == nil {
+	fmt.Println("id is: ", id)
+	user, err := database.QuerySingleProfileById(id)
+	if err != nil {
 		utils.WriteJson(w, http.StatusNotFound, model.ErrorResponse{
 			Status:  "error",
 			Message: "Invalid user id; user not found",
@@ -563,7 +563,7 @@ func ExportProfilesCSV(w http.ResponseWriter, r *http.Request) {
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 
 	var filters database.SearchFilter
-	limit := 1000000
+	limit := 10
 	offset := 0
 
 	if q != "" {
