@@ -82,10 +82,7 @@ func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
-		Status: "success",
-		Data:   fullUrl,
-	})
+	http.Redirect(w, r, fullUrl, http.StatusTemporaryRedirect)
 
 }
 
@@ -93,7 +90,7 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 	queryCode := r.URL.Query().Get("code")
-	if state == "" {
+	if state == "" || code == "" {
 		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
 			Message: "missing state parameter",
@@ -237,26 +234,31 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(refreshToken)))
 	database.AddRefreshToken(tokenHash, activeId)
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    accessToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   180,
+	utils.WriteJson(w, http.StatusOK, map[string]string{
+		"status":        "success",
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
 	})
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   300,
-	})
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:     "access_token",
+	// 	Value:    accessToken,
+	// 	Path:     "/",
+	// 	HttpOnly: true,
+	// 	Secure:   true,
+	// 	SameSite: http.SameSiteLaxMode,
+	// 	MaxAge:   180,
+	// })
+
+	// http.SetCookie(w, &http.Cookie{
+	// 	Name:     "refresh_token",
+	// 	Value:    refreshToken,
+	// 	Path:     "/",
+	// 	HttpOnly: true,
+	// 	Secure:   true,
+	// 	SameSite: http.SameSiteLaxMode,
+	// 	MaxAge:   300,
+	// })
 	err = database.AdddState(state, accessToken, refreshToken)
 	if err != nil {
 		log.Println("error adding access tokens to database: ", err)
@@ -267,9 +269,9 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//make this a browser redirect to the frontend please
-	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
-		Status: "success",
-	})
+	// utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+	// 	Status: "success",
+	// })
 
 	// utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
 	// 	Status: "success",
@@ -286,6 +288,7 @@ func CliPoll(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string           `json:"refresh_token"`
 		UserDetails  database.Account `json:"user_details"`
 	}
+
 	state := r.URL.Query().Get("state") //probably unsafe but whatever
 	storedTokens, err := database.GetState(state)
 	if err != nil {
@@ -412,7 +415,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	userId, err := utils.GetUserIDFromToken(token)
 	if err != nil {
 		log.Println("find user id error: ", err)
-		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+		utils.WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
 			Status:  "error",
 			Message: "we could not find the account associated with that token",
 		})
@@ -421,7 +424,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	err = database.DeleteRefreshToken(database.TokenGetter{UserId: userId})
 	if err != nil {
 		log.Println(err)
-		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+		utils.WriteJson(w, http.StatusUnauthorized, model.ErrorResponse{
 			Status:  "error",
 			Message: "token invalidation failed; logout was unsuccessful",
 		})

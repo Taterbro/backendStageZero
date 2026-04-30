@@ -1,17 +1,22 @@
 # Intelligence Query Engine
 
-A simple Go REST API that supports natural language processing for querying a database efficiently.
+A simple Go REST API that supports natural language processing for querying a database efficiently, with **OAuth-based authentication, role-based access control, and multi-client support (CLI + Web Portal).**
 
 ---
 
-This project is my submission for the hng internship stage 2 backend track.
+This project is my submission for the HNG internship stage 2 backend track.  
 https://airtable.com/appZPpwy4dtvVBWU4/shrMH9P1zv4TPhvns?C3OrT=recCRAOnUwTulDtq6
+
+---
 
 ## 📦 Tech Stack
 
-- Go (net/http)
+- Go (`net/http`)
 - UUID for IDs
 - errgroup (concurrency handling)
+- JWT (access + refresh tokens)
+- HTTP-only cookies (web auth)
+- GitHub OAuth (authentication provider)
 - External APIs:
   - https://api.agify.io
   - https://api.genderize.io
@@ -19,7 +24,150 @@ https://airtable.com/appZPpwy4dtvVBWU4/shrMH9P1zv4TPhvns?C3OrT=recCRAOnUwTulDtq6
 
 ---
 
-## ▶️ Running the Project Locally
+# 🔐 Authentication System
+
+The system supports **GitHub OAuth login** and issues **JWT-based session tokens**.
+
+## 🔁 Authentication Flow
+
+### 1. Login Initiation
+
+- User (CLI or Web) starts login request
+- Backend redirects user to GitHub OAuth page
+
+### 2. GitHub Callback
+
+- GitHub redirects back to backend callback endpoint
+- Backend exchanges authorization code for GitHub access token
+- Backend fetches user profile from GitHub
+
+### 3. Session Creation
+
+Backend then:
+
+- Generates internal **access token (JWT)**
+- Generates **refresh token**
+- Stores refresh token reference in database
+- Associates tokens with user identity + role
+
+### 4. Token Delivery
+
+#### Web Client
+
+- Access token is stored in **HTTP-only secure cookies**
+- Prevents JavaScript access (XSS protection)
+
+#### CLI Client
+
+- Tokens are returned in JSON payload
+- CLI stores them locally (e.g. `~/.mycli/credentials.json`)
+
+---
+
+## 🔄 Token Refresh Flow
+
+- Access tokens are short-lived
+- CLI/Web uses refresh token to request new access token
+- Backend validates refresh token against stored record
+- New access token is issued without requiring re-login
+
+---
+
+# 🧠 Role-Based Access Control (RBAC)
+
+The system enforces roles at the API level.
+
+## Roles
+
+- `user` → default role
+- `admin` → elevated privileges (if enabled in system)
+
+## Enforcement Rules
+
+- Role is embedded inside JWT claims
+- Middleware extracts and validates role on every request
+
+### Access Rules Example:
+
+- `/query` → accessible to all authenticated users
+- `/admin/*` → restricted to admin role only
+- Invalid role → request rejected with `403 Forbidden`
+
+## Security Model
+
+- No role is trusted from client input
+- Role is derived only from:
+  - JWT claims (validated signature)
+  - Server-side stored identity
+
+---
+
+# 💻 CLI + 🌐 Web Integration Model
+
+The backend is designed to support **two different clients simultaneously**:
+
+## 1. CLI Client
+
+Used for developers or terminal-based usage.
+
+### Flow:
+
+- User runs CLI command (e.g. `login`)
+- CLI initiates OAuth login via backend
+- Backend returns authentication state/code (for polling)
+- CLI continuously polls backend for login completion
+- Once authenticated:
+  - CLI receives JWT + refresh token
+- CLI stores credentials locally
+
+### Storage:
+
+- `~/.mycli/credentials.json`
+
+### Behavior:
+
+- Stateless after login
+- Uses stored tokens for all API requests
+
+---
+
+## 2. Web Portal
+
+Used for browser-based interaction.
+
+### Flow:
+
+- Browser redirects to GitHub OAuth
+- Backend sets HTTP-only cookie after login
+- Frontend never sees raw tokens
+- Session is automatically attached to requests
+
+### Features:
+
+- Dashboard view
+- Profile browsing
+- Search interface
+- Account page
+
+---
+
+## 🔁 Shared Backend Design
+
+Both CLI and Web:
+
+- Use the same OAuth backend
+- Use the same JWT issuance system
+- Share the same database session store
+- Differ only in token delivery method
+
+| Client | Token Storage    | Auth Method             |
+| ------ | ---------------- | ----------------------- |
+| CLI    | Local file       | Polling + JSON response |
+| Web    | HTTP-only cookie | Browser session         |
+
+---
+
+# ▶️ Running the Project Locally
 
 Make sure Go is installed:
 
@@ -30,168 +178,3 @@ cd backendStageZero
 go mod tidy
 go run cmd/api/main.go
 ```
-
-server will start at http://localhost:8080
-
----
-
-# Features
-
-## 1. Natural Language Query Support
-
-- Accepts a `q` parameter with plain English input (e.g. `"female users above 25 in nigeria"`).
-- Parses input into structured filters using regex
-- Enables non-technical users to perform searches without knowing query parameters.
-
----
-
-## 2. Structured Filtering (Overrides / Complements NLP)
-
-Supports direct query parameters:
-
-- `gender`
-- `country_id`
-- `age_group`
-- `min_age`, `max_age`
-- `min_gender_probability`
-- `min_country_probability`
-
-These parameters can:
-
-- Override NLP-derived filters
-- Be used independently without NLP
-
----
-
-## 3. Dynamic Query Construction
-
-- SQL query is built incrementally based on provided filters.
-- Only necessary conditions are included.
-- Improves efficiency and flexibility for partial queries.
-
----
-
-## 4. Pagination Support
-
-- Parameters:
-  - `page` (default: 1)
-  - `limit` (default: 10, max: 50)
-- Uses SQL `LIMIT` and `OFFSET` for efficient pagination.
-
----
-
-## 5. Sorting & Ordering
-
-Supports sorting by:
-
-- `name`
-- `age`
-- `created_at`
-- `gender_probability`
-- `country_probability`
-
-Supports ordering:
-
-- `asc`
-- `desc`
-
-- Sorting and ordering are restricted via whitelists to prevent SQL injection.
-
----
-
-## 6. Input Validation & Error Handling
-
-- Validates numeric inputs (age, probabilities, pagination).
-- Returns structured error responses for invalid inputs.
-- Prevents malformed queries from reaching the database.
-
----
-
-## 7. SQL Injection Protection (Partial)
-
-- Uses parameterized queries (`?` placeholders).
-- Restricts dynamic SQL parts (sorting/order) to predefined safe values.
-
----
-
-## 8. Flexible Query Usage
-
-Supports:
-
-- NLP-only queries (`q`)
-- Structured query parameters only
-- Combination of both
-
----
-
-# Limitations of NLP Queries
-
-## 1. Rule-Based Parsing
-
-- Relies entirely on predefined parsing rules (No AI/LLMs).
-- Implemented with pattern matching or keyword rules.
-- Cannot generalize beyond predefined patterns.
-
----
-
-## 2. No True Language Understanding
-
-- Does not understand context, intent, or semantics.
-- Small variations in phrasing may break parsing.
-
----
-
-## 3. No Fuzzy Matching
-
-- Requires near-exact matches.
-- Misspellings or variations are not handled.
-
----
-
-## 4. No Conflict Resolution
-
-- When both NLP and query parameters are provided:
-  - Later values overwrite earlier ones silently.
-- No explicit conflict handling logic.
-
----
-
-## 5. No Complex Query Support
-
-Cannot handle:
-
-- OR conditions (`male OR female`)
-- Nested logic (`(age > 20 AND female) OR country = US`)
-- Comparative expressions (`closer to 30 than 20`)
-
----
-
-## 6. Language Limitation
-
-- Supports English only.
-- No multilingual capability.
-
----
-
-## 7. Schema Dependency
-
-- NLP logic is tightly coupled to database fields.
-- Any schema changes require updates to the parser.
-
----
-
-# Summary
-
-This system is a **rule-based natural language to SQL filter translator**.
-
-### Strengths:
-
-- Predictable behavior
-- Fast execution
-- Safe (controlled inputs and SQL construction)
-
-### Trade-offs:
-
-- Limited flexibility
-- Fragile to language variation
-- Requires manual updates to expand capabilities

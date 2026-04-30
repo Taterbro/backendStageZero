@@ -30,12 +30,13 @@ func main() {
 	mux.Handle("GET /api/profiles/{id}", utils.AuthMiddleware(utils.GeneralLimiter(http.HandlerFunc(handler.FindUser))))
 	//mux.HandleFunc("GET /api/dev", handler.DevQuery)
 	mux.HandleFunc("DELETE /api/profiles/{id}", handler.DeleteUser)
-	mux.Handle("GET /api/auth/github", utils.AuthLimiter(http.HandlerFunc(handler.GitHubAuth)))
+	mux.Handle("GET /auth/github", utils.AuthLimiter(http.HandlerFunc(handler.GitHubAuth)))
 	mux.Handle("GET /api/account", utils.AuthMiddleware(http.HandlerFunc(handler.GitHubAuth)))
-	mux.Handle("GET /api/auth/github/callback", utils.AuthLimiter(http.HandlerFunc(handler.GitHubCallback)))
+	mux.Handle("GET /api/users/me", utils.AuthMiddleware(http.HandlerFunc(handler.GitHubAuth)))
+	mux.Handle("GET /auth/github/callback", utils.AuthLimiter(http.HandlerFunc(handler.GitHubCallback)))
 	mux.Handle("GET /api/auth/callback/poll", utils.AuthLimiter(http.HandlerFunc(handler.CliPoll)))
-	mux.Handle("POST /api/auth/refresh", utils.AuthLimiter(http.HandlerFunc(handler.Refresh)))
-	mux.Handle("GET /api/auth/logout", utils.AuthMiddleware(utils.AuthLimiter(http.HandlerFunc(handler.Logout))))
+	mux.Handle("POST /auth/refresh", utils.AuthLimiter(http.HandlerFunc(handler.Refresh)))
+	mux.Handle("GET /auth/logout", utils.AuthMiddleware(utils.AuthLimiter(http.HandlerFunc(handler.Logout))))
 
 	server := &http.Server{
 		Addr:    ":8080",
