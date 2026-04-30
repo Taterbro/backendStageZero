@@ -32,6 +32,7 @@ func main() {
 	mux.HandleFunc("DELETE /api/profiles/{id}", handler.DeleteUser)
 	mux.Handle("GET /api/auth/github", utils.AuthLimiter(http.HandlerFunc(handler.GitHubAuth)))
 	mux.Handle("GET /api/auth/github/callback", utils.AuthLimiter(http.HandlerFunc(handler.GitHubCallback)))
+	mux.Handle("GET /api/auth/callback/poll", utils.AuthLimiter(http.HandlerFunc(handler.CliPoll)))
 	mux.Handle("GET /api/auth/refresh", utils.AuthLimiter(http.HandlerFunc(handler.Refresh)))
 	mux.Handle("GET /api/auth/logout", utils.AuthMiddleware(utils.AuthLimiter(http.HandlerFunc(handler.Logout))))
 

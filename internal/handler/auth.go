@@ -50,6 +50,7 @@ func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 	client_id := os.Getenv("GITHUB_CLIENT_ID")
 	redirect_uri := os.Getenv("GITHUB_REDIRECT_URI")
 	code_verifier, err := utils.GenerateToken(32)
+	platform := r.URL.Query().Get("platform")
 	if err != nil {
 		log.Println("couldn't generate code challenge")
 		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
@@ -73,6 +74,14 @@ func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 	Set(state, code_verifier, 10*time.Minute)
 
 	fullUrl := fmt.Sprintf("%s/authorize?client_id=%s&redirect_uri=%s&code_challenge=%s&code_challenge_method=%s&state=%s", os.Getenv("GITHUB_URL"), client_id, redirect_uri, code_challenge, code_challenge_method, state)
+	if platform != "" {
+		utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+			Status: "success",
+			Data:   map[string]string{"url": fullUrl, "state": state},
+		})
+		return
+
+	}
 	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
 		Status: "success",
 		Data:   fullUrl,
@@ -83,7 +92,6 @@ func GitHubAuth(w http.ResponseWriter, r *http.Request) {
 func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
-	clientPlatform := r.URL.Query().Get("platform")
 	if state == "" {
 		utils.WriteJson(w, http.StatusBadRequest, model.ErrorResponse{
 			Status:  "error",
@@ -225,39 +233,90 @@ func GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(refreshToken)))
 	database.AddRefreshToken(tokenHash, activeId)
 
-	if clientPlatform == "browser" {
-		http.SetCookie(w, &http.Cookie{
-			Name:     "access_token",
-			Value:    accessToken,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   180,
-		})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    accessToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   180,
+	})
 
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    tokenHash,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   300,
-		})
-		utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
-			Status: "success",
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   300,
+	})
+	err = database.AdddState(state, accessToken, refreshToken)
+	if err != nil {
+		log.Println("error adding access tokens to database: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong on our end",
 		})
 		return
 	}
-
+	//make this a browser redirect to the frontend please
 	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
 		Status: "success",
-		Data: map[string]string{
-			"access_token":  accessToken,
-			"refresh_token": refreshToken,
+	})
+
+	// utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+	// 	Status: "success",
+	// 	Data: map[string]string{
+	// 		"access_token":  accessToken,
+	// 		"refresh_token": refreshToken,
+	// 	},
+	// })
+}
+
+func CliPoll(w http.ResponseWriter, r *http.Request) {
+	type PollResponse struct {
+		AccessToken  string           `json:"access_token"`
+		RefreshToken string           `json:"refresh_token"`
+		UserDetails  database.Account `json:"user_details"`
+	}
+	state := r.URL.Query().Get("state") //probably unsafe but whatever
+	storedTokens, err := database.GetState(state)
+	if err != nil {
+		utils.WriteJson(w, http.StatusNotFound, model.SuccessResponse{
+			Status: "pending",
+		})
+		return
+	}
+	userId, err := utils.GetUserIDFromToken(storedTokens.AccessToken)
+	if err != nil {
+		log.Println("error getting ID from token: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong",
+		})
+		return
+	}
+	userDetails, err := database.GetAccount(database.GetAccountType{Id: userId})
+	if err != nil {
+		log.Println("error getting user account: ", err)
+		utils.WriteJson(w, http.StatusInternalServerError, model.ErrorResponse{
+			Status:  "error",
+			Message: "something went wrong",
+		})
+		return
+	}
+	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+		Status: "success",
+		Data: PollResponse{
+			AccessToken:  storedTokens.AccessToken,
+			RefreshToken: storedTokens.RefreshToken,
+			UserDetails:  userDetails,
 		},
 	})
+	database.DeleteState(state)
+
 }
 
 func Refresh(w http.ResponseWriter, r *http.Request) {

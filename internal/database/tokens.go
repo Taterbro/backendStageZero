@@ -24,6 +24,13 @@ type TokenGetter struct {
 	UserId string
 }
 
+type State struct {
+	ID           string
+	State        string
+	AccessToken  string
+	RefreshToken string
+}
+
 func AddRefreshToken(hash string, userId string) error {
 	var token RefreshToken
 	var revoked sql.NullTime
@@ -162,6 +169,82 @@ func DeleteRefreshToken(id TokenGetter) error {
 
 	if rowsAffected == 0 {
 		return fmt.Errorf("no refresh token found for %s", value)
+	}
+
+	return nil
+}
+
+func GetState(state string) (State, error) {
+	var (
+		row   *sql.Row
+		value string
+		rt    State
+	)
+	if state == "" {
+
+		return rt, fmt.Errorf("no token identifier provided")
+	}
+
+	row = db.QueryRow(
+		`SELECT id, state, access_token, refresh_token
+			 FROM states
+			 WHERE state = ?`,
+		state,
+	)
+
+	err := row.Scan(
+		&rt.ID,
+		&rt.State,
+		&rt.AccessToken,
+		&rt.RefreshToken,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return rt, fmt.Errorf("no refresh token found for %s", value)
+		}
+		return rt, err
+	}
+
+	return rt, nil
+}
+
+func AdddState(state string, accessToken string, refToken string) error {
+	var token State
+	token.State = state
+	token.AccessToken = accessToken
+	token.RefreshToken = refToken
+	query := `
+		INSERT INTO states (
+			state,
+			access_token,
+			refresh_token
+		)
+		VALUES (?, ?, ?)
+	`
+
+	_, err := db.Exec(
+		query,
+		token.State,
+		token.AccessToken,
+		token.RefreshToken,
+	)
+	if err != nil {
+		log.Println(err)
+	}
+	return err
+}
+
+func DeleteState(state string) error {
+	query := `
+		DELETE FROM states
+		WHERE state = ?
+	`
+
+	_, err := db.Exec(query, state)
+	if err != nil {
+		log.Println(err)
+		return err
 	}
 
 	return nil
