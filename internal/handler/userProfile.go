@@ -694,3 +694,33 @@ func ExportProfilesCSV(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 }
+
+func Account(w http.ResponseWriter, r *http.Request) {
+	header := r.Header.Get("Authorization")
+
+	parts := strings.Split(header, " ")
+	userId, err := utils.GetUserIDFromToken(parts[1])
+	if err != nil {
+		log.Println("get user id error: ", err)
+		utils.WriteJson(w, http.StatusNotFound, model.ErrorResponse{
+			Status:  "error",
+			Message: "Invalid account id; user not found",
+		})
+		return
+	}
+	userDetails, err := database.GetAccount(database.GetAccountType{Id: userId})
+	if err != nil {
+		log.Println("get user error: ", err)
+		utils.WriteJson(w, http.StatusNotFound, model.ErrorResponse{
+			Status:  "error",
+			Message: "Invalid account id; user not found",
+		})
+		return
+	}
+
+	utils.WriteJson(w, http.StatusOK, model.SuccessResponse{
+		Status: "success",
+		Data:   userDetails,
+	})
+
+}
